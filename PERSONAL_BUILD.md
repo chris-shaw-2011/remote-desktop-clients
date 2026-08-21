@@ -9,11 +9,10 @@ published.
 
 - `.github/workflows/build-ardp.yml` runs on pushes to `master`, can be run
   manually, and is reusable by the sync workflow. It downloads the repository's
-  prebuilt native dependencies, runs the documented project preparation step,
-  applies the repository's Java-side FreeRDP glyph-cache compatibility patch when
-  dependency archive 17 lacks it, builds `:aRDP-app:assembleRelease`, signs and
-  verifies the ARM64 split, uploads it as a 30-day Actions artifact, and creates
-  a uniquely tagged GitHub Release.
+  prebuilt dependencies, rebuilds the pinned ARM64 FreeRDP source with the
+  repository patch series, runs the documented project preparation step, builds
+  `:aRDP-app:assembleRelease`, signs and verifies the ARM64 split, uploads it as
+  a 30-day Actions artifact, and creates a uniquely tagged GitHub Release.
 - `.github/workflows/sync-upstream.yml` runs every six hours and on demand. It
   fetches `upstream/master`, does nothing when that commit is already contained
   in the fork's default branch, and otherwise creates and pushes a normal merge
@@ -46,6 +45,14 @@ having Android terminate its process ends all sessions; the personal build does
 not add a foreground service. Device clipboard synchronization follows the
 focused panel, while audio and microphone redirection remain configured per
 connection.
+
+## Quest RDP audio
+
+The personal build adds a 150 ms playback cushion to FreeRDP's OpenSL ES output
+and declares the matching `rdpsnd` latency. This avoids short gaps caused by
+packet-arrival jitter at the cost of roughly 150 ms of added audio delay. See
+[`docs/RDP_AUDIO_PLAYBACK.md`](docs/RDP_AUDIO_PLAYBACK.md) for the diagnosis,
+design decisions, build implications, and Quest validation checklist.
 
 ## One-time GitHub setup
 
