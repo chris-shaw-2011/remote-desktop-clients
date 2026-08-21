@@ -45,6 +45,7 @@ import com.iiordanov.bVNC.SSHConnection;
 import com.iiordanov.bVNC.Utils;
 import com.iiordanov.bVNC.input.KeyInputHandler;
 import com.iiordanov.bVNC.input.PointerInputHandler;
+import com.iiordanov.bVNC.input.RemoteCanvasHandler;
 import com.iiordanov.bVNC.input.RemoteKeyboard;
 import com.undatech.opaque.Connection;
 import com.undatech.opaque.InputCarriable;
@@ -79,7 +80,7 @@ abstract public class RemoteConnection implements PointerInputHandler, KeyInputH
      * Handler for the dialogs that display the x509/RDP/SSH key signatures to the user.
      * Also shows the dialogs which show various connection failures.
      */
-    public static Handler handler;
+    public Handler handler;
     public Map<String, String> vmNameToId = new HashMap<>();
     // RFB Decoder
     Decoder decoder = null;
@@ -174,7 +175,7 @@ abstract public class RemoteConnection implements PointerInputHandler, KeyInputH
     }
 
     public void setHandler(Handler handler) {
-        RemoteConnection.handler = handler;
+        this.handler = handler;
     }
 
     /**
@@ -230,7 +231,13 @@ abstract public class RemoteConnection implements PointerInputHandler, KeyInputH
      */
     public void showFatalMessageAndQuit(final String error) {
         closeConnection();
-        handler.post(() -> Utils.showFatalErrorMessage(context, error));
+        handler.post(() -> {
+            if (handler instanceof RemoteCanvasHandler) {
+                ((RemoteCanvasHandler) handler).displayFatalMessageAndFinish(error);
+            } else {
+                Utils.showFatalErrorMessage(context, error);
+            }
+        });
     }
 
     /**
@@ -258,6 +265,10 @@ abstract public class RemoteConnection implements PointerInputHandler, KeyInputH
      * so it does not echo the server's text back on the next polling tick.
      */
     public void setClipboardText(String s) {
+        if (!canvas.isForegrounded()) {
+            Log.d(TAG, "Ignoring remote clipboard update from an unfocused session");
+            return;
+        }
         if (s != null && !s.isEmpty()) {
             try {
                 clipboard.setPrimaryClip(ClipData.newPlainText(null, s));
