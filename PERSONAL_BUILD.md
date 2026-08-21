@@ -26,6 +26,27 @@ upstream. If the branch is renamed, update the `push.branches` entry in
 `build-ardp.yml`; the sync workflow discovers the fork's default branch at run
 time.
 
+## Multiple Quest panels
+
+Every saved connection, shortcut, `rdp://` link, and `.rdp` file opens in its
+own resizable Android task. Selecting a saved connection replaces the connection
+grid inside its current panel, so the RDP session inherits that panel's position
+and size instead of appearing beside it. Reopen aRDP to create a new connection
+grid panel, position that picker where the next session should remain, and
+select another connection. Closing or disconnecting one RDP panel affects only
+that session.
+
+Shortcuts, `rdp://` links, and `.rdp` files have no existing picker panel to
+replace, so they continue to open a new RDP panel. Saved connections that invoke
+an external VPN client also retain the separate-panel flow.
+
+aRDP does not impose a connection limit. The number of panels that remain live
+depends on Horizon OS window limits and available memory. Force-stopping aRDP or
+having Android terminate its process ends all sessions; the personal build does
+not add a foreground service. Device clipboard synchronization follows the
+focused panel, while audio and microphone redirection remain configured per
+connection.
+
 ## One-time GitHub setup
 
 In **Settings > Actions > General**:
