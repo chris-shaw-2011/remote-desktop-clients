@@ -158,6 +158,10 @@ jobs:
           fi
           grep -Fq 'void setGlyphCache(boolean glyphCache)' "$bookmark"
 
+      - name: Test concurrent RDP session routing
+        shell: bash
+        run: ./gradlew --no-daemon --stacktrace :remoteClientLib:testDebugUnitTest
+
       - name: Build aRDP release APKs
         shell: bash
         run: ./gradlew --no-daemon --stacktrace :aRDP-app:assembleRelease
@@ -191,6 +195,18 @@ jobs:
             echo "::error::Could not read version information from the APK"
             exit 1
           fi
+
+          manifest_tree="$RUNNER_TEMP/ardp-manifest-tree.txt"
+          "$AAPT" dump xmltree "$apk" AndroidManifest.xml > "$manifest_tree"
+          canvas_manifest=$(sed -n '/RemoteCanvasActivity/,/E: intent-filter/p' "$manifest_tree")
+          if ! grep -Eq 'android:launchMode.*0x0$' <<< "$canvas_manifest" ||
+             ! grep -Eq 'android:documentLaunchMode.*0x2$' <<< "$canvas_manifest" ||
+             ! grep -Eq 'android:resizeableActivity.*0xffffffff$' <<< "$canvas_manifest"; then
+            echo "::error::RemoteCanvasActivity is not packaged for resizable multi-document launch"
+            printf '%s\n' "$canvas_manifest"
+            exit 1
+          fi
+
           zip_entries="$RUNNER_TEMP/ardp-zip-entries.txt"
           unzip -Z1 "$apk" > "$zip_entries"
           if ! grep -Eq '^lib/arm64-v8a/[^/]+\.so$' "$zip_entries"; then
