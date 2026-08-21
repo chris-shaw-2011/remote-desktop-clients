@@ -35,6 +35,7 @@
             android:configChanges="keyboardHidden"
             android:exported="true"
             android:label="@string/ardp_app_name"
+            android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:theme="@style/AppThemeDayNight"
             >
@@ -57,9 +58,13 @@
         <activity
             android:name="com.iiordanov.bVNC.RemoteCanvasActivity"
             android:configChanges="colorMode|density|fontScale|fontWeightAdjustment|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:documentLaunchMode="always"
             android:exported="true"
+            android:launchMode="standard"
             android:resizeableActivity="true"
+            android:taskAffinity="com.iiordanov.aRDP.rdpSession"
             android:theme="@style/AppTheme"
+            tools:replace="android:launchMode"
             android:windowSoftInputMode="stateHidden|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

@@ -280,7 +280,12 @@ public class ConnectionGridActivity extends AppCompatActivity implements GetText
                 this
         );
         try {
-            startActivityForResult(intent, LAUNCH_CONNECTION_REQUEST_CODE);
+            if ("com.iiordanov.aRDP".equals(getPackageName())) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+                startActivity(intent);
+            } else {
+                startActivityForResult(intent, LAUNCH_CONNECTION_REQUEST_CODE);
+            }
         } catch (ActivityNotFoundException e) {
             Log.e(TAG, "Error launching connection: " + e);
             Snackbar.make(gridView, R.string.no_application_to_handle_vpn, Snackbar.LENGTH_LONG).show();
