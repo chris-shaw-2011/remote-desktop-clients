@@ -41,6 +41,7 @@ bVNC/gst-build-x86_64/
 java/org/freedesktop/gstreamer/androidmedia/
 bVNC/libs/sqlcipher-javadoc.jar
 bVNC/libs/sqlcipher.jar
+bVNC/libs/com.antlersoft.android.*.jar
 bVNC/release/
 bVNC/src/main/assets/
 bVNC/src2/main/assets/fontconfig/
@@ -200,10 +201,14 @@ fabric.properties
 
 !/gradle/wrapper/gradle-wrapper.jar
 
+# Dependencies downloaded or extracted by the documented prebuilt build path
+common/aars/android-database-sqlcipher-*.aar
+
 # End of AndroidStudio ###
 
 GITHUB_TOKEN
 build-*
+!/.github/workflows/build-ardp.yml
 upload_*
 trigger-*
 increment_*
