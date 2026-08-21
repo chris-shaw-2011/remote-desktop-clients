@@ -35,7 +35,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Select source commit
@@ -136,27 +136,32 @@ jobs:
 
           echo "build_tools=$build_tools" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare prebuilt native dependencies
+      - name: Prepare and patch native dependencies
         shell: bash
         run: |
           set -euo pipefail
           ./download-prebuilt-dependencies.sh
+          (
+            cd remoteClientLib/jni/libs
+            ANDROID_ABIS=arm64-v8a \
+              FORCE_FREERDP_BUILD=true \
+              ANDROID_SDK="$ANDROID_SDK_ROOT" \
+              ./build-deps.sh -j "$(nproc)" freerdp
+          )
           ./bVNC/prepare_project.sh --skip-build libs nopath
 
           freerdp_root="remoteClientLib/jni/libs/deps/FreeRDP"
           bookmark="$freerdp_root/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/domain/BookmarkBase.java"
+          libfreerdp_client="$freerdp_root/client/Android/Studio/freeRDPCore/src/main/jniLibs/arm64-v8a/libfreerdp-client2.so"
           if [[ ! -f "$bookmark" || ! -d "$freerdp_root/client/Android/Studio/freeRDPCore/src/main/jniLibs/arm64-v8a" ]]; then
-            echo "::error::The prebuilt FreeRDP dependency did not extract correctly"
+            echo "::error::The patched FreeRDP dependency was not built correctly"
             exit 1
           fi
 
-          # Dependency archive 17 predates this repository's Java-side glyph-cache
-          # addition. Apply the repository's own patch when the archive lacks it.
-          if ! grep -Fq 'void setGlyphCache(boolean glyphCache)' "$bookmark"; then
-            patch --batch --forward -p1 -d "$freerdp_root" \
-              < remoteClientLib/jni/libs/19_freerdp_add_glyph_cache_to_bookmark.patch
-          fi
           grep -Fq 'void setGlyphCache(boolean glyphCache)' "$bookmark"
+          grep -Fq 'args.add("/sound:latency:150")' \
+            "$freerdp_root/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java"
+          grep -Faq 'Starting buffered OpenSL playback with %d ms prebuffer' "$libfreerdp_client"
 
       - name: Build aRDP release APKs
         shell: bash
