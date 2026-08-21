@@ -46,6 +46,13 @@ Java latency argument and native marker are present. This is necessary because
 dependency archive 17 contains an older precompiled `libfreerdp-client2.so` and
 cannot carry the native fix by itself.
 
+`23_freerdp_use_selected_ndk_for_openssl.patch` also makes the native rebuild
+portable to GitHub's Android runner. OpenSSL 1.1.1 prefers a pre-existing
+`ANDROID_NDK_HOME` over FreeRDP's selected `ANDROID_NDK`; the runner defines the
+former globally, while this build installs and selects NDK r25c. The patch keeps
+both variables pointed at the selected NDK so OpenSSL finds the same Clang that
+FreeRDP put on `PATH`.
+
 The initial implementation stays on FreeRDP 2.11.7 to keep this focused audio
 repair source-compatible with the existing application integration. Moving to a
 new FreeRDP major version is a separate migration with broader API, behavior,

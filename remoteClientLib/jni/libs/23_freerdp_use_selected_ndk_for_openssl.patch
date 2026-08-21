@@ -1,0 +1,12 @@
+diff --git a/scripts/android-build-openssl.sh b/scripts/android-build-openssl.sh
+index d5c815741..c57375482 100755
+--- a/scripts/android-build-openssl.sh
++++ b/scripts/android-build-openssl.sh
+@@ -21,6 +21,7 @@ function build {
+     common_run export CC=clang
+     common_run export PATH=$(${SCRIPT_PATH}/toolchains_path.py --ndk ${ANDROID_NDK}):$ORG_PATH
+     common_run export ANDROID_NDK
++    common_run export ANDROID_NDK_HOME="${ANDROID_NDK}"
+ 
+ 	echo "CONFIG=$CONFIG"
+ 	echo "DST_PREFIX=$DST_PREFIX"

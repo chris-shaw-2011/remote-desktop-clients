@@ -506,7 +506,7 @@ fail_handler() {
 
 build_freerdp() {
 
-    if [ -f FREERDP_BUILT ]
+    if [ -f FREERDP_BUILT ] && [ "${FORCE_FREERDP_BUILD:-false}" != "true" ]
     then
       echo ; echo
       echo "FreeRDP was previously built. Remove $(realpath FREERDP_BUILT) if you want to rebuild it."
@@ -517,7 +517,7 @@ build_freerdp() {
     pushd deps
     basedir="$(pwd)"
 
-    missing_artifact="false"
+    missing_artifact="${FORCE_FREERDP_BUILD:-false}"
     for abi in $abis
     do
       for f in ${freerdp_artifacts}
@@ -601,9 +601,7 @@ trap fail_handler ERR
 
 # Parse command-line options
 parallel=""
-export ANDROID_NDK=$(install_ndk ./ ${ndk_version})
-echo "Android NDK version ${ndk_version} is installed at ${ANDROID_NDK}"
-ndkdir="${ANDROID_NDK}"
+ndkdir=""
 origdir="$(pwd)"
 
 while getopts "j:n:" opt
@@ -625,6 +623,15 @@ sdist)
     sdist
     ;;
 build)
+    if [ -z "${ndkdir}" ]
+    then
+        export ANDROID_NDK=$(install_ndk ./ ${ndk_version})
+    else
+        export ANDROID_NDK=$(realpath "${ndkdir}")
+    fi
+    echo "Android NDK version ${ndk_version} is installed at ${ANDROID_NDK}"
+    ndkdir="${ANDROID_NDK}"
+
     echo "Setting LDFLAGS for 16kb alignment"
     export LDFLAGS="${LDFLAGS} -Wl,-z,max-page-size=16384"
 
@@ -643,6 +650,11 @@ build)
     echo
 
     ;;
+freerdp)
+    echo "Setting LDFLAGS for 16kb alignment"
+    export LDFLAGS="${LDFLAGS} -Wl,-z,max-page-size=16384"
+    build_freerdp
+    ;;
 clean)
     shift
     clean "$@"
@@ -654,6 +666,7 @@ updates)
     cat <<EOF
 Usage: $0 sdist
        $0 [-j<parallelism>] [-n<ndk-dir>] build
+       $0 [-j<parallelism>] freerdp
        $0 clean [package...]
        $0 updates
 
