@@ -91,6 +91,9 @@ import java.util.Map;
 
 public class ConnectionGridActivity extends AppCompatActivity implements GetTextFragment.OnFragmentDismissedListener {
     private static final String TAG = "ConnectionGridActivity";
+    private static final String ARDP_PACKAGE_NAME = "com.iiordanov.aRDP";
+    private static final String ARDP_IN_PLACE_CANVAS_CLASS_NAME =
+            "com.iiordanov.bVNC.InPlaceRemoteCanvasActivity";
     protected Database database;
     protected boolean isStarting = true;
     FragmentManager fragmentManager = getSupportFragmentManager();
@@ -280,12 +283,27 @@ public class ConnectionGridActivity extends AppCompatActivity implements GetText
                 this
         );
         try {
-            startActivityForResult(intent, LAUNCH_CONNECTION_REQUEST_CODE);
+            if (isDirectArdpCanvasIntent(intent)) {
+                intent.setClassName(this, ARDP_IN_PLACE_CANVAS_CLASS_NAME);
+                startActivity(intent);
+                finish();
+            } else if (ARDP_PACKAGE_NAME.equals(getPackageName())) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+                startActivity(intent);
+            } else {
+                startActivityForResult(intent, LAUNCH_CONNECTION_REQUEST_CODE);
+            }
         } catch (ActivityNotFoundException e) {
             Log.e(TAG, "Error launching connection: " + e);
             Snackbar.make(gridView, R.string.no_application_to_handle_vpn, Snackbar.LENGTH_LONG).show();
             startUriIntent(this, "market://search?q=pub:\"Morpheusly\"");
         }
+    }
+
+    private boolean isDirectArdpCanvasIntent(Intent intent) {
+        return ARDP_PACKAGE_NAME.equals(getPackageName()) &&
+                intent.getComponent() != null &&
+                Constants.remoteCanvasActivityClassPath.equals(intent.getComponent().getClassName());
     }
 
     private void editConnection(View v) {

@@ -3,7 +3,6 @@ package com.iiordanov.bVNC.input;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -129,6 +128,33 @@ public class RemoteCanvasHandler extends Handler implements HttpsFileDownloader.
         remoteConnection.closeConnection();
     }
 
+    public void displayFatalMessageAndFinish(String messageText) {
+        MessageFragment message = MessageFragment.newInstance(
+                context.getString(R.string.error_dialog_title),
+                messageText,
+                context.getString(R.string.ok),
+                () -> Utils.justFinish(context));
+        message.setCancelable(false);
+        message.show(fm, "fatalError");
+    }
+
+    private void showChoice(String title, String messageText, Runnable onYes, Runnable onNo) {
+        ChoiceFragment choice = ChoiceFragment.newInstance(
+                title,
+                messageText,
+                context.getString(android.R.string.yes),
+                context.getString(android.R.string.no),
+                result -> {
+                    if (result) {
+                        onYes.run();
+                    } else {
+                        onNo.run();
+                    }
+                });
+        choice.setCancelable(false);
+        choice.show(fm, "connectionChoice");
+    }
+
 
     /**
      * If there is a saved cert, checks the one given against it. If a signature was passed in
@@ -247,12 +273,12 @@ public class RemoteCanvasHandler extends Handler implements HttpsFileDownloader.
             }
         }
         // Show a dialog with the key signature for approval.
-        DialogInterface.OnClickListener signatureNo = (dialog, which) -> {
+        Runnable signatureNo = () -> {
             // We were told not to continue, so stop the activity
             remoteConnection.closeConnection();
             Utils.justFinish(context);
         };
-        DialogInterface.OnClickListener signatureYes = (dialog, which) -> {
+        Runnable signatureYes = () -> {
             // Indicate the certificate was accepted.
             if (save) {
                 connection.setX509KeySignature(fingerprint);
@@ -273,7 +299,7 @@ public class RemoteCanvasHandler extends Handler implements HttpsFileDownloader.
         if (certMismatch) {
             message += "\n\n" + context.getString(R.string.warning_cert_does_not_match);
         }
-        Utils.showYesNoPrompt(context,
+        showChoice(
                 context.getString(R.string.info_continue_connecting) + connection.getAddress() + "?",
                 message,
                 signatureYes,
@@ -297,14 +323,13 @@ public class RemoteCanvasHandler extends Handler implements HttpsFileDownloader.
      * The user can choose to proceed without encryption upgrade or cancel the connection.
      */
     private void showEncryptionUpgradePossibleWarning(int title, int message) {
-        DialogInterface.OnClickListener onCancel = (dialog, which) -> {
+        Runnable onCancel = () -> {
             remoteConnection.getRfbConn().setEncryptionUpgradeDeclined(false);
         };
-        DialogInterface.OnClickListener onProceed = (dialog, which) -> {
+        Runnable onProceed = () -> {
             remoteConnection.getRfbConn().setEncryptionUpgradeDeclined(true);
         };
-        Utils.showYesNoPrompt(
-                context,
+        showChoice(
                 context.getString(title),
                 context.getString(message),
                 onProceed,
@@ -326,12 +351,12 @@ public class RemoteCanvasHandler extends Handler implements HttpsFileDownloader.
 
         c.displayOnScreenMessageShortDuration(R.string.info_ssh_initializing_hostkey);
         // Show a dialog with the key signature.
-        DialogInterface.OnClickListener signatureNo = (dialog, which) -> {
+        Runnable signatureNo = () -> {
             // We were told to not continue, so stop the activity
             dismissProgressDialog();
             Utils.justFinish(context);
         };
-        DialogInterface.OnClickListener signatureYes = (dialog, which) -> {
+        Runnable signatureYes = () -> {
             // We were told to go ahead with the connection.
             connection.setIdHash(idHash); // could prompt based on algorithm
             connection.setSshHostKey(serverHostKey);
@@ -343,8 +368,7 @@ public class RemoteCanvasHandler extends Handler implements HttpsFileDownloader.
 
         String warning = keyChangeDetected ?
                 context.getString(R.string.error_ssh_hostkey_changed) + "\n" : "\n";
-        Utils.showYesNoPrompt(
-                context,
+        showChoice(
                 context.getString(R.string.info_continue_connecting) + connection.getSshServer() + "?",
                 warning +
                         context.getString(R.string.info_ssh_key_fingerprint) +

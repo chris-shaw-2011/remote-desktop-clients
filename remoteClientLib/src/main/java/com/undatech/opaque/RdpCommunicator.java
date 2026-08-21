@@ -19,15 +19,14 @@ import com.undatech.opaque.util.GeneralUtils;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
-import java.lang.reflect.Field;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper.KeyProcessingListener,
         LibFreeRDP.UIEventListener, LibFreeRDP.EventListener {
     static final String TAG = "RdpCommunicator";
+    private static final RdpSessionRegistry SESSION_REGISTRY = new RdpSessionRegistry();
 
     // private final static int VK_CONTROL = 0x11;
     private final static int VK_LCONTROL = 0xA2;
@@ -41,10 +40,8 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     private final static int VK_EXT_KEY = 0x00000100;
     private final RdpCommunicator myself;
     private final Viewable viewable;
-    private SessionState session;
+    private volatile SessionState session;
     private final BookmarkBase bookmark;
-    // Keeps track of libFreeRDP instance
-    private final GlobalApp freeRdpApp;
     private final Context context;
     private boolean isInNormalProtocol = false;
     // This variable indicates whether or not the user has accepted an untrusted
@@ -75,9 +72,7 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     ) {
         super(debugLogging, handler, isRemoteToLocalClipboardIntegrationEnabled);
         this.connection = connection;
-        // This is necessary because it initializes a synchronizedMap referenced later.
-        this.freeRdpApp = new GlobalApp();
-        patchFreeRdpCore();
+        SESSION_REGISTRY.install();
         // Create a manual bookmark and populate it from settings.
         this.bookmark = new ManualBookmark();
         this.context = context;
@@ -95,20 +90,6 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         modifierMap.put(RemoteKeyboard.SHIFT_MASK, VK_LSHIFT);
         modifierMap.put(RemoteKeyboard.RSHIFT_MASK, VK_RSHIFT);
         initSession(rdpFileName, username, domain, password);
-    }
-
-    private void patchFreeRdpCore() {
-        Class<? extends GlobalApp> cls = this.freeRdpApp.getClass();
-        try {
-            Log.i(TAG, "Initializing sessionMap in GlobalApp");
-            Field sessionMap = cls.getDeclaredField("sessionMap");
-            sessionMap.setAccessible(true);
-            sessionMap.set(this.freeRdpApp, Collections.synchronizedMap(new HashMap<Long, SessionState>()));
-        } catch (NoSuchFieldException e) {
-            Log.e(TAG, "There is no longer a sessionMap field in GlobalApp");
-        } catch (IllegalAccessException e) {
-            Log.e(TAG, "The field sessionMap in GlobalApp was not accessible despite our attempts");
-        }
     }
 
     @Override
@@ -201,11 +182,15 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
+        if (disconnectRequested) {
+            return;
+        }
         setIsInNormalProtocol(false);
         disconnectRequested = true;
         long instance = session.getInstance();
-        DisconnectThread d = new DisconnectThread(instance);
+        inputExecutor.shutdown();
+        DisconnectThread d = new DisconnectThread(instance, inputExecutor);
         d.start();
     }
 
@@ -309,13 +294,25 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     }
 
     private void initSession(String rdpFileName, String username, String domain, String password) {
+        SessionState previousSession = session;
         bookmark.setRdpFileName(rdpFileName);
         bookmark.setUsername(username);
         bookmark.setDomain(domain);
         bookmark.setPassword(password);
-        session = GlobalApp.createSession(bookmark, context);
-        session.setUIEventListener(this);
-        LibFreeRDP.setEventListener(this);
+        SessionState newSession = GlobalApp.createSession(bookmark, context);
+        newSession.setUIEventListener(this);
+        session = newSession;
+        long previousInstance = 0;
+        if (previousSession != null) {
+            previousSession.setUIEventListener(null);
+            previousInstance = previousSession.getInstance();
+        }
+        SESSION_REGISTRY.replace(previousInstance, newSession.getInstance(), this);
+    }
+
+    private boolean isCurrentSession(long instance) {
+        SessionState currentSession = session;
+        return currentSession != null && currentSession.getInstance() == instance;
     }
 
     public void setConnectionParameters(
@@ -401,6 +398,9 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
     @Override
     public void OnPreConnect(long instance) {
+        if (!isCurrentSession(instance)) {
+            return;
+        }
         Log.v(TAG, "OnPreConnect");
     }
 
@@ -411,6 +411,9 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
     @Override
     public void OnConnectionSuccess(long instance) {
+        if (!isCurrentSession(instance)) {
+            return;
+        }
         Log.v(TAG, "OnConnectionSuccess");
         reattemptWithoutCredentials = false;
         authenticationAttempted = false;
@@ -419,12 +422,18 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
     @Override
     public void OnConnectionFailure(long instance) {
+        if (!isCurrentSession(instance)) {
+            return;
+        }
         Log.v(TAG, "OnConnectionFailure");
         myself.setIsInNormalProtocol(false);
     }
 
     @Override
     public void OnDisconnecting(long instance) {
+        if (!isCurrentSession(instance)) {
+            return;
+        }
         Log.v(TAG, "OnDisconnecting, reattemptWithoutCredentials: " + reattemptWithoutCredentials +
                 ", authenticationAttempted: " + authenticationAttempted +
                 ", disconnectRequested: " + disconnectRequested +
@@ -453,6 +462,9 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
     @Override
     public void OnDisconnected(long instance) {
+        if (!isCurrentSession(instance)) {
+            return;
+        }
         Log.v(TAG, "OnDisconnected");
         if (!myself.isInNormalProtocol()) {
             Log.v(TAG, "Sending message: RDP_UNABLE_TO_CONNECT");
@@ -599,15 +611,24 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     }
 
     public static class DisconnectThread extends Thread {
-        long instance;
+        private final long instance;
+        private final ExecutorService inputExecutor;
 
-        public DisconnectThread(long i) {
+        public DisconnectThread(long i, ExecutorService inputExecutor) {
             this.instance = i;
+            this.inputExecutor = inputExecutor;
         }
 
         public void run() {
+            try {
+                if (!inputExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
+                    inputExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                inputExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
             LibFreeRDP.disconnect(instance);
-            //LibFreeRDP.freeInstance(instance);
         }
     }
 }

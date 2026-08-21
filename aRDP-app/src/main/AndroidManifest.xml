@@ -33,9 +33,12 @@
         <activity
             android:name="com.undatech.opaque.ConnectionGridActivity"
             android:configChanges="keyboardHidden"
+            android:documentLaunchMode="always"
             android:exported="true"
             android:label="@string/ardp_app_name"
+            android:launchMode="standard"
             android:resizeableActivity="true"
+            android:taskAffinity="com.iiordanov.aRDP.connectionPicker"
             android:theme="@style/AppThemeDayNight"
             >
             <intent-filter>
@@ -57,9 +60,13 @@
         <activity
             android:name="com.iiordanov.bVNC.RemoteCanvasActivity"
             android:configChanges="colorMode|density|fontScale|fontWeightAdjustment|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:documentLaunchMode="always"
             android:exported="true"
+            android:launchMode="standard"
             android:resizeableActivity="true"
+            android:taskAffinity="com.iiordanov.aRDP.rdpSession"
             android:theme="@style/AppTheme"
+            tools:replace="android:launchMode"
             android:windowSoftInputMode="stateHidden|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -92,5 +99,29 @@
                 <data android:pathPattern=".*\\.rdp"/>
             </intent-filter>
         </activity>
+        <activity
+            android:name="com.iiordanov.bVNC.InPlaceRemoteCanvasActivity"
+            android:configChanges="colorMode|density|fontScale|fontWeightAdjustment|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:documentLaunchMode="never"
+            android:exported="false"
+            android:launchMode="standard"
+            android:resizeableActivity="true"
+            android:screenOrientation="fullUser"
+            android:taskAffinity="com.iiordanov.aRDP.rdpSession"
+            android:theme="@style/AppTheme"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
+        <service
+            android:name="com.iiordanov.bVNC.input.SystemKeyCaptureService"
+            android:description="@string/system_key_capture_description"
+            android:exported="true"
+            android:label="@string/system_key_capture_title"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/system_key_capture_service" />
+        </service>
     </application>
 </manifest> 

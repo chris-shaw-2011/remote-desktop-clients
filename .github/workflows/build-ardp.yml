@@ -191,6 +191,32 @@ jobs:
             echo "::error::Could not read version information from the APK"
             exit 1
           fi
+
+          manifest_tree="$RUNNER_TEMP/ardp-manifest-tree.txt"
+          "$AAPT" dump xmltree "$apk" AndroidManifest.xml > "$manifest_tree"
+          grid_manifest=$(grep -A 12 -F '"com.undatech.opaque.ConnectionGridActivity"' "$manifest_tree")
+          canvas_manifest=$(grep -A 12 -F '"com.iiordanov.bVNC.RemoteCanvasActivity"' "$manifest_tree")
+          in_place_canvas_manifest=$(grep -A 12 -F '"com.iiordanov.bVNC.InPlaceRemoteCanvasActivity"' "$manifest_tree")
+          if ! grep -Eq 'android:taskAffinity.*"com\.iiordanov\.aRDP\.connectionPicker"' <<< "$grid_manifest" ||
+             ! grep -Eq 'android:launchMode.*0x0$' <<< "$grid_manifest" ||
+             ! grep -Eq 'android:documentLaunchMode.*0x2$' <<< "$grid_manifest" ||
+             ! grep -Eq 'android:resizeableActivity.*0xffffffff$' <<< "$grid_manifest" ||
+             ! grep -Eq 'android:launchMode.*0x0$' <<< "$canvas_manifest" ||
+             ! grep -Eq 'android:documentLaunchMode.*0x2$' <<< "$canvas_manifest" ||
+             ! grep -Eq 'android:taskAffinity.*"com\.iiordanov\.aRDP\.rdpSession"' <<< "$canvas_manifest" ||
+             ! grep -Eq 'android:resizeableActivity.*0xffffffff$' <<< "$canvas_manifest" ||
+             ! grep -Eq 'android:exported.*0x0$' <<< "$in_place_canvas_manifest" ||
+             ! grep -Eq 'android:launchMode.*0x0$' <<< "$in_place_canvas_manifest" ||
+             ! grep -Eq 'android:documentLaunchMode.*0x3$' <<< "$in_place_canvas_manifest" ||
+             ! grep -Eq 'android:taskAffinity.*"com\.iiordanov\.aRDP\.rdpSession"' <<< "$in_place_canvas_manifest" ||
+             ! grep -Eq 'android:resizeableActivity.*0xffffffff$' <<< "$in_place_canvas_manifest"; then
+            echo "::error::aRDP picker and canvases do not have the required task behavior"
+            printf '%s\n' "$grid_manifest"
+            printf '%s\n' "$canvas_manifest"
+            printf '%s\n' "$in_place_canvas_manifest"
+            exit 1
+          fi
+
           zip_entries="$RUNNER_TEMP/ardp-zip-entries.txt"
           unzip -Z1 "$apk" > "$zip_entries"
           if ! grep -Eq '^lib/arm64-v8a/[^/]+\.so$' "$zip_entries"; then
