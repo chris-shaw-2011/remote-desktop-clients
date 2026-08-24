@@ -142,6 +142,7 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
     View[] pageIndicatorDots;
     ExtraKeysPagerAdapter extraKeysPagerAdapter;
     boolean extraKeysHidden = false;
+    boolean toolbarHidden = false;
     volatile boolean softKeyboardUp;
     RemoteToolbar toolbar;
     View rootView;
@@ -346,6 +347,7 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
     }
 
     private void setApplicationSpecificSettings() {
+        toolbarHidden = Utils.querySharedPreferenceBoolean(this, Constants.hideToolbarTag);
         if (Utils.isOpaque(this)) {
             setVolumeControlStream(AudioManager.STREAM_MUSIC);
         } else {
@@ -1337,6 +1339,14 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
 
     public void showActionBar() {
         handler.removeCallbacks(actionBarShower);
+        if (toolbarHidden) {
+            ActionBar actionBar = getSupportActionBar();
+            if (actionBar != null) {
+                actionBar.hide();
+            }
+            handler.removeCallbacks(actionBarHider);
+            return;
+        }
         handler.postAtTime(actionBarShower, SystemClock.uptimeMillis() + 50);
         handler.removeCallbacks(actionBarHider);
         handler.postAtTime(actionBarHider, SystemClock.uptimeMillis() + hideToolbarDelay);
@@ -1458,7 +1468,7 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
 
         private void showActionBar() {
             ActionBar actionBar = getSupportActionBar();
-            if (actionBar != null) {
+            if (!toolbarHidden && actionBar != null) {
                 Log.d(TAG, "ActionBarShower: Showing ActionBar");
                 actionBar.show();
             }
