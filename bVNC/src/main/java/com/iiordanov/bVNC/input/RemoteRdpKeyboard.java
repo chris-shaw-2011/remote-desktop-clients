@@ -39,33 +39,31 @@ public class RemoteRdpKeyboard extends RemoteKeyboard {
         if (shouldDropModifierKeys(evt))
             return true;
         boolean isRepeat = evt.getRepeatCount() > 0;
-        rdpcomm.remoteKeyboardState.detectHardwareMetaState(evt);
 
         if (rdpcomm != null && rdpcomm.isInNormalProtocol()) {
             RemotePointer pointer = remoteInput.getPointer();
             boolean down = (evt.getAction() == KeyEvent.ACTION_DOWN) ||
                     (evt.getAction() == KeyEvent.ACTION_MULTIPLE);
-            int metaState = additionalMetaState | convertEventMetaState(evt);
+            boolean hardwareKeyEvent = evt.getScanCode() != 0 || evt.getDeviceId() >= 0;
+            int eventMetaState = additionalMetaState | convertEventMetaState(evt);
+            if (hardwareKeyEvent)
+                rdpcomm.remoteKeyboardState.detectHardwareMetaState(evt);
 
             if (keyCode == KeyEvent.KEYCODE_MENU)
                 return true;                           // Ignore menu key
 
-            if (pointer.hardwareButtonsAsMouseEvents(keyCode, evt, metaState | onScreenMetaState))
+            if (pointer.hardwareButtonsAsMouseEvents(
+                    keyCode, evt, eventMetaState | onScreenMetaState))
                 return true;
 
-            // Detect whether this event is coming from a default hardware keyboard.
-            metaState = onScreenMetaState | metaState;
-
-            // Update the meta-state with writeKeyEvent.
-            if (down) {
-                rdpcomm.writeKeyEvent(keyCode, metaState, down);
-                evt = injectMetaState(evt, metaState);
-                lastDownMetaState = metaState;
-            } else {
-                rdpcomm.writeKeyEvent(keyCode, lastDownMetaState, down);
-                evt = injectMetaState(evt, lastDownMetaState);
-                lastDownMetaState = 0;
+            // Physical modifiers are sent by their own key events. Only soft/on-screen sources
+            // need modifier synthesis around another key.
+            int syntheticMetaState = onScreenMetaState | additionalMetaState;
+            if (!hardwareKeyEvent) {
+                syntheticMetaState |= convertEventMetaState(evt);
+                evt = replaceMetaState(evt, evt.getMetaState() | syntheticMetaState);
             }
+            rdpcomm.writeKeyEvent(keyCode, syntheticMetaState, down);
 
             if (keyCode == 0 && evt.getCharacters() != null /*KEYCODE_UNKNOWN*/) {
                 String s = evt.getCharacters();
@@ -75,17 +73,25 @@ public class RemoteRdpKeyboard extends RemoteKeyboard {
                     int numchars = s.length();
                     for (int i = 0; i < numchars; i++) {
                         KeyEvent event = new KeyEvent(evt.getEventTime(), s.substring(i, i + 1), KeyCharacterMap.FULL, 0);
-                        keyboardMapper.processAndroidKeyEvent(event, isRepeat);
+                        keyboardMapper.processAndroidKeyEvent(event, isRepeat, hardwareKeyEvent);
                     }
                 }
                 return true;
             } else {
                 // Send the key to be processed through the KeyboardMapper.
-                return keyboardMapper.processAndroidKeyEvent(evt, isRepeat);
+                return keyboardMapper.processAndroidKeyEvent(evt, isRepeat, hardwareKeyEvent);
             }
         } else {
             return false;
         }
+    }
+
+    @Override
+    public void releaseAllKeys() {
+        clearMetaState();
+        keyboardMapper.clearAllModifiers();
+        keyboardMapper.clearPressedKeys();
+        rdpcomm.releaseAllKeys();
     }
 
     public void sendMetaKey(MetaKeyBean meta) {

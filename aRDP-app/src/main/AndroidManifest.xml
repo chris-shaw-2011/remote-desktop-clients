@@ -23,7 +23,7 @@
         android:required="false" />
 
     <application
-        android:name="com.iiordanov.bVNC.App"
+        android:name="com.iiordanov.ardp.ArdpApp"
         android:allowBackup="false"
         android:banner="@mipmap/banner_ardp"
         android:icon="@mipmap/icon_ardp"
@@ -123,5 +123,12 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/system_key_capture_service" />
         </service>
+        <receiver
+            android:name="com.iiordanov.ardp.ArdpUpdatedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
-</manifest> 
+</manifest>
