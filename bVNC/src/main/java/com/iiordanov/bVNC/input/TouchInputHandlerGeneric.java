@@ -25,6 +25,7 @@ import android.annotation.SuppressLint;
 import android.os.Build;
 import android.os.SystemClock;
 import android.view.GestureDetector;
+import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 
@@ -87,6 +88,7 @@ abstract class TouchInputHandlerGeneric extends GestureDetector.SimpleOnGestureL
     // The variables which indicates how many scroll events to send per swipe
     // event and the maximum number to send at one time.
     long swipeSpeed = 1;
+    private final MouseWheelStepAccumulator mouseWheelSteps = new MouseWheelStepAccumulator();
     // This is how far the swipe has to travel before a swipe event is generated.
     float startSwipeDist = 15.f;
     float baseSwipeDist = 10.f;
@@ -232,18 +234,27 @@ abstract class TouchInputHandlerGeneric extends GestureDetector.SimpleOnGestureL
                 scrollUp = false;
                 scrollRight = false;
                 scrollLeft = false;
+                int scrollSteps;
+                if (e.isFromSource(InputDevice.SOURCE_MOUSE)) {
+                    scrollSteps = vscroll != 0
+                            ? mouseWheelSteps.consume(vscroll, true, e.getEventTime())
+                            : mouseWheelSteps.consume(hscroll, false, e.getEventTime());
+                } else {
+                    scrollSteps = (int) (vscroll != 0 ? vscroll : hscroll);
+                }
+
                 // Determine direction and speed of scrolling.
                 if (vscroll < 0) {
-                    swipeSpeed = (int) (-1 * vscroll);
+                    swipeSpeed = Math.abs(scrollSteps);
                     scrollDown = true;
                 } else if (vscroll > 0) {
-                    swipeSpeed = (int) vscroll;
+                    swipeSpeed = Math.abs(scrollSteps);
                     scrollUp = true;
                 } else if (hscroll < 0) {
-                    swipeSpeed = (int) (-1 * hscroll);
+                    swipeSpeed = Math.abs(scrollSteps);
                     scrollRight = true;
                 } else if (hscroll > 0) {
-                    swipeSpeed = (int) hscroll;
+                    swipeSpeed = Math.abs(scrollSteps);
                     scrollLeft = true;
                 } else
                     break;
@@ -280,6 +291,35 @@ abstract class TouchInputHandlerGeneric extends GestureDetector.SimpleOnGestureL
 
         prevMouseOrStylusAction = action;
         return used;
+    }
+
+    static final class MouseWheelStepAccumulator {
+        private static final long BURST_TIMEOUT_MS = 100;
+        private double verticalRemainder;
+        private double horizontalRemainder;
+        private long lastEventTime = Long.MIN_VALUE;
+        private boolean lastEventWasVertical;
+        private float lastDirection;
+
+        int consume(float value, boolean vertical, long eventTime) {
+            float direction = Math.signum(value);
+            boolean startsBurst = lastEventTime == Long.MIN_VALUE ||
+                    eventTime - lastEventTime > BURST_TIMEOUT_MS ||
+                    vertical != lastEventWasVertical || direction != lastDirection;
+            double accumulated = startsBurst
+                    ? value
+                    : value + (vertical ? verticalRemainder : horizontalRemainder);
+            int steps = startsBurst ? (int) direction : (int) accumulated;
+            if (vertical) {
+                verticalRemainder = accumulated - steps;
+            } else {
+                horizontalRemainder = accumulated - steps;
+            }
+            lastEventTime = eventTime;
+            lastEventWasVertical = vertical;
+            lastDirection = direction;
+            return steps;
+        }
     }
 
     /**
