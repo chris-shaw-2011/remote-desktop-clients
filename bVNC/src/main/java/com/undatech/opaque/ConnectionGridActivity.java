@@ -51,7 +51,6 @@ import android.widget.GridView;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.core.view.MenuItemCompat;
 import androidx.fragment.app.FragmentManager;
@@ -89,7 +88,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ConnectionGridActivity extends AppCompatActivity implements GetTextFragment.OnFragmentDismissedListener {
+public class ConnectionGridActivity extends NormalizedScrollActivity implements GetTextFragment.OnFragmentDismissedListener {
     private static final String TAG = "ConnectionGridActivity";
     protected Database database;
     protected boolean isStarting = true;

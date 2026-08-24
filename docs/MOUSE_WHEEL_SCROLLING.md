@@ -32,9 +32,15 @@ defaults to 100% (the normalized behavior from the original fix). Remote input
 always turns the first isolated wheel movement into one wheel tick, then
 accumulates fractional movement during a sustained scroll. This keeps slow,
 precise detents responsive while applying the percentage to faster scrolling.
+The isolated tick does not create fractional debt. Android's event cadence is
+otherwise preserved directly, so a fast or free-spinning wheel generates more
+ticks than slow input without a synthetic inertia curve, raw-magnitude mapping,
+or timer that continues scrolling after input stops.
 RDP wheel ticks use a dedicated stateless pointer-event path so each logical
 tick is sent exactly once rather than being repeated by mouse movement and
-button-release handling.
+button-release handling. The generic scroll loop also omits movement and release
+messages for stateless protocols, preventing fast RDP scrolling from flooding
+the serialized input queue and delaying graphics updates.
 
 ## Validation
 
