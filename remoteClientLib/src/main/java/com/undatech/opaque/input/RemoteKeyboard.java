@@ -214,6 +214,11 @@ public abstract class RemoteKeyboard {
         onScreenMetaState = 0;
     }
 
+    public void releaseAllKeys() {
+        clearMetaState();
+        keyEvent(0, new KeyEvent(KeyEvent.ACTION_UP, 0));
+    }
+
     public void sendText(String s) {
         for (int i = 0; i < s.length(); i++) {
             KeyEvent event = null;
@@ -386,6 +391,20 @@ public abstract class RemoteKeyboard {
                     event.getScanCode());
         }
         return evt;
+    }
+
+    protected KeyEvent replaceMetaState(KeyEvent event, int metaState) {
+        String characters = event.getCharacters();
+        if (characters != null)
+            return new KeyEvent(event.getEventTime(), characters, event.getDeviceId(), event.getFlags());
+        return new KeyEvent(event.getDownTime(),
+                event.getEventTime(),
+                event.getAction(),
+                event.getKeyCode(),
+                event.getRepeatCount(),
+                metaState,
+                event.getDeviceId(),
+                event.getScanCode());
     }
 
     public boolean shouldDropModifierKeys(KeyEvent event) {

@@ -85,6 +85,7 @@ import com.iiordanov.bVNC.input.RemoteCanvasHandler;
 import com.iiordanov.bVNC.input.RemoteClientsInputListener;
 import com.iiordanov.bVNC.input.RemoteKeyboard;
 import com.iiordanov.bVNC.input.ScrollWheelButton;
+import com.iiordanov.bVNC.input.SystemKeyCaptureService;
 import com.iiordanov.bVNC.input.TouchInputHandler;
 import com.iiordanov.bVNC.input.TouchInputHandlerDirectDragPan;
 import com.iiordanov.bVNC.input.TouchInputHandlerDirectSwipePan;
@@ -113,7 +114,8 @@ import java.util.TimerTask;
 
 @SuppressLint("ClickableViewAccessibility")
 public class RemoteCanvasActivity extends NormalizedScrollActivity implements
-        SelectTextElementFragment.OnFragmentDismissedListener, TouchInputDelegate {
+        SelectTextElementFragment.OnFragmentDismissedListener, TouchInputDelegate,
+        SystemKeyCaptureService.KeyEventListener {
 
     public static final int[] inputModeIds = {R.id.itemInputTouchpad,
             R.id.itemInputTouchPanZoomMouse,
@@ -267,8 +269,30 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
         Log.d(TAG, "onWindowFocusChanged: " + hasFocus);
         canvas.setForegrounded(hasFocus);
         if (hasFocus) {
+            SystemKeyCaptureService.setKeyEventListener(this);
             controlImmersive();
+        } else {
+            SystemKeyCaptureService.clearKeyEventListener(this);
+            releaseRemoteKeys();
         }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (SystemKeyCaptureService.isMetaKeyEvent(event.getKeyCode(), event.getMetaState())
+                && onCapturedKeyEvent(event)) {
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean onCapturedKeyEvent(KeyEvent event) {
+        if (inputListener == null) {
+            return false;
+        }
+        inputListener.onKey(canvas, event.getKeyCode(), event);
+        return true;
     }
 
     @SuppressLint("ObsoleteSdkInt")
@@ -795,6 +819,8 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
 
     @Override
     protected void onPause() {
+        SystemKeyCaptureService.clearKeyEventListener(this);
+        releaseRemoteKeys();
         super.onPause();
         Log.i(TAG, "onPause called.");
         try {
@@ -803,6 +829,11 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
         } catch (NullPointerException e) {
             Log.d(TAG, "Ignoring NullPointerException during onPause");
         }
+    }
+
+    private void releaseRemoteKeys() {
+        if (remoteConnection != null && remoteConnection.getKeyboard() != null)
+            remoteConnection.getKeyboard().releaseAllKeys();
     }
 
     @Override
