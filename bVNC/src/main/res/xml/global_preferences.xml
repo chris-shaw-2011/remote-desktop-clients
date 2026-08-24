@@ -12,6 +12,10 @@
         android:title="@string/immersive_mode_disable" />
     <SwitchPreferenceCompat
         android:defaultValue="false"
+        android:key="hideToolbar"
+        android:title="@string/hide_toolbar" />
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
         android:key="keepScreenOn"
         android:title="@string/keep_screen_awake_enable" />
     <SwitchPreferenceCompat
