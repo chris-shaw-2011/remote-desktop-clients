@@ -23,10 +23,14 @@ import android.view.KeyEvent;
 
 import com.undatech.opaque.util.GeneralUtils;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class RemoteKeyboardState {
     private static final String TAG = "RemoteKeyboardState";
     private int remoteKeyboardMetaState = 0;
     private int hardwareMetaState = 0;
+    private final Map<Integer, Integer> keyDownMetaStates = new HashMap<>();
     private boolean debugLogging = false;
 
     public RemoteKeyboardState(boolean debugLogging) {
@@ -189,6 +193,61 @@ public class RemoteKeyboardState {
                     break;
             }
         }
+
+        reconcileHardwareShiftState(keyCode, event.getMetaState());
+    }
+
+    void reconcileHardwareShiftState(int keyCode, int eventMetaState) {
+        if (keyCode != KeyEvent.KEYCODE_SHIFT_LEFT && keyCode != KeyEvent.KEYCODE_SHIFT_RIGHT) {
+            int directionalShiftState = eventMetaState &
+                    (KeyEvent.META_SHIFT_LEFT_ON | KeyEvent.META_SHIFT_RIGHT_ON);
+            if (directionalShiftState != 0) {
+                hardwareMetaState &= ~(RemoteKeyboard.SHIFT_MASK | RemoteKeyboard.RSHIFT_MASK);
+                if ((directionalShiftState & KeyEvent.META_SHIFT_LEFT_ON) != 0)
+                    hardwareMetaState |= RemoteKeyboard.SHIFT_MASK;
+                if ((directionalShiftState & KeyEvent.META_SHIFT_RIGHT_ON) != 0)
+                    hardwareMetaState |= RemoteKeyboard.RSHIFT_MASK;
+            } else if ((eventMetaState & KeyEvent.META_SHIFT_ON) == 0) {
+                hardwareMetaState &= ~(RemoteKeyboard.SHIFT_MASK | RemoteKeyboard.RSHIFT_MASK);
+            }
+        }
+    }
+
+    public int resolveShiftMetaState(int convertedMetaState, int eventMetaState,
+                                     boolean hardwareKeyEvent) {
+        boolean genericShiftOnly = (eventMetaState & KeyEvent.META_SHIFT_ON) != 0 &&
+                (eventMetaState & (KeyEvent.META_SHIFT_LEFT_ON |
+                        KeyEvent.META_SHIFT_RIGHT_ON)) == 0;
+        if (hardwareKeyEvent && genericShiftOnly) {
+            convertedMetaState &= ~(RemoteKeyboard.SHIFT_MASK | RemoteKeyboard.RSHIFT_MASK);
+            convertedMetaState |= hardwareMetaState &
+                    (RemoteKeyboard.SHIFT_MASK | RemoteKeyboard.RSHIFT_MASK);
+        }
+        return convertedMetaState;
+    }
+
+    public void recordKeyDownMetaState(int keyCode, int metaState) {
+        keyDownMetaStates.put(keyCode, metaState);
+    }
+
+    public int consumeKeyUpMetaState(int keyCode, int fallbackMetaState) {
+        Integer metaState = keyDownMetaStates.remove(keyCode);
+        return metaState == null ? fallbackMetaState : metaState;
+    }
+
+    public boolean isHardwareModifierActive(int modifier) {
+        return (hardwareMetaState & modifier) != 0;
+    }
+
+    public boolean isRemoteModifierActive(int modifier) {
+        return (remoteKeyboardMetaState & modifier) != 0;
+    }
+
+    public Boolean getModifierStateChange(int softwareMetaState, int modifier, boolean beforeInput) {
+        boolean targetState = beforeInput
+                ? (softwareMetaState & modifier) != 0
+                : isHardwareModifierActive(modifier);
+        return targetState == isRemoteModifierActive(modifier) ? null : targetState;
     }
 
     public boolean shouldSendModifier(int softwareMetaState,
