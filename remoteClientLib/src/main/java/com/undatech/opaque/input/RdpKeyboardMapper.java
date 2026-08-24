@@ -230,6 +230,7 @@ public class RdpKeyboardMapper {
     private boolean isCtrlLocked = false;
     private boolean isAltLocked = false;
     private boolean isWinLocked = false;
+    private Boolean capsLockOn = null;
     private boolean preferSendingUnicode = false;
     private boolean debugLog = false;
 
@@ -448,6 +449,7 @@ public class RdpKeyboardMapper {
         ctrlPressed = false;
         altPressed = false;
         winPressed = false;
+        capsLockOn = null;
         setKeyProcessingListener(listener);
     }
 
@@ -458,6 +460,14 @@ public class RdpKeyboardMapper {
     public boolean processAndroidKeyEvent(KeyEvent event, boolean isRepeat) {
         int vkcode = getVirtualKeyCode(event.getKeyCode());
         int unicode = event.getUnicodeChar();
+
+        if (vkcode == VK_CAPITAL) {
+            if (updateCapsLockState(event.isCapsLockOn())) {
+                listener.processVirtualKey(VK_CAPITAL, true);
+                listener.processVirtualKey(VK_CAPITAL, false);
+            }
+            return true;
+        }
 
         // If a different unicode character is generated with vs without the metastate, (e.g. ß
         // which is generated with ALT), then we do not want to send Alt separately with unicode
@@ -531,6 +541,13 @@ public class RdpKeyboardMapper {
                 break;
         }
         return false;
+    }
+
+    boolean updateCapsLockState(boolean isCapsLockOn) {
+        if (capsLockOn != null && capsLockOn == isCapsLockOn)
+            return false;
+        capsLockOn = isCapsLockOn;
+        return true;
     }
 
     public void processCustomKeyEvent(int keycode) {
@@ -741,4 +758,3 @@ public class RdpKeyboardMapper {
     }
 
 }
-
