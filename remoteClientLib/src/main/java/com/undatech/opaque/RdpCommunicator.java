@@ -218,6 +218,43 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         }
     }
 
+    private void synchronizeModifierKeys(boolean beforeInput) {
+        for (int modifierMask : modifierMap.keySet()) {
+            Boolean targetState = remoteKeyboardState.getModifierStateChange(
+                    metaState, modifierMask, beforeInput);
+            if (targetState != null) {
+                Integer modifier = modifierMap.get(modifierMask);
+                if (modifier != null) {
+                    sendKeyEventOnNewThread(modifier, targetState);
+                    remoteKeyboardState.updateRemoteMetaState(modifierMask, targetState);
+                }
+            }
+        }
+    }
+
+    private int getModifierMask(int virtualKeyCode) {
+        switch (virtualKeyCode) {
+            case VK_LCONTROL:
+                return RemoteKeyboard.CTRL_MASK;
+            case VK_RCONTROL | VK_EXT_KEY:
+                return RemoteKeyboard.RCTRL_MASK;
+            case VK_LMENU:
+                return RemoteKeyboard.ALT_MASK;
+            case VK_RMENU | VK_EXT_KEY:
+                return RemoteKeyboard.RALT_MASK;
+            case VK_LSHIFT:
+                return RemoteKeyboard.SHIFT_MASK;
+            case VK_RSHIFT:
+                return RemoteKeyboard.RSHIFT_MASK;
+            case VK_LWIN | VK_EXT_KEY:
+                return RemoteKeyboard.SUPER_MASK;
+            case VK_RWIN | VK_EXT_KEY:
+                return RemoteKeyboard.RSUPER_MASK;
+            default:
+                return 0;
+        }
+    }
+
     // ****************************************************************************
     // KeyboardMapper.KeyProcessingListener implementation
     @Override
@@ -225,14 +262,18 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         GeneralUtils.debugLog(this.debugLogging, TAG, "processVirtualKey: " +
                 "Processing VK key: " + virtualKeyCode + ". Is it down: " + down);
 
-        if (down) {
-            sendModifierKeys(true);
+        int modifierMask = getModifierMask(virtualKeyCode);
+        if (modifierMask != 0) {
+            sendKeyEventOnNewThread(virtualKeyCode, down);
+            remoteKeyboardState.updateRemoteMetaState(modifierMask, down);
+            return;
         }
-        sendKeyEventOnNewThread(virtualKeyCode, down);
 
-        if (!down) {
-            sendModifierKeys(false);
-        }
+        if (down)
+            synchronizeModifierKeys(true);
+        sendKeyEventOnNewThread(virtualKeyCode, down);
+        if (!down)
+            synchronizeModifierKeys(false);
     }
 
     private void sendKeyEventOnNewThread(int virtualKeyCode, boolean down) {
@@ -249,13 +290,11 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         GeneralUtils.debugLog(this.debugLogging, TAG, "processUnicodeKey: " +
                 "Processing unicode key: " + unicodeKey + ", down: " + down +
                 ", metaState: " + metaState + ", suppressMetaState: " + suppressMetaState);
-        if (down && !suppressMetaState) {
-            sendModifierKeys(true);
-        }
+        if (down && !suppressMetaState)
+            synchronizeModifierKeys(true);
         sendUnicodeKeyOnNewThread(unicodeKey, down);
-        if (!down && !suppressMetaState) {
-            sendModifierKeys(false);
-        }
+        if (!down && !suppressMetaState)
+            synchronizeModifierKeys(false);
     }
 
     private void sendUnicodeKeyOnNewThread(int unicodeKey, boolean down) {
