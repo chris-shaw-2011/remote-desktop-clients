@@ -46,6 +46,9 @@ public class RemoteRdpKeyboard extends RemoteKeyboard {
             boolean down = (evt.getAction() == KeyEvent.ACTION_DOWN) ||
                     (evt.getAction() == KeyEvent.ACTION_MULTIPLE);
             int metaState = additionalMetaState | convertEventMetaState(evt);
+            boolean hardwareKeyEvent = evt.getScanCode() != 0 || evt.getDeviceId() >= 0;
+            metaState = rdpcomm.remoteKeyboardState.resolveShiftMetaState(
+                    metaState, evt.getMetaState(), hardwareKeyEvent);
 
             if (keyCode == KeyEvent.KEYCODE_MENU)
                 return true;                           // Ignore menu key
@@ -59,13 +62,13 @@ public class RemoteRdpKeyboard extends RemoteKeyboard {
             // Update the meta-state with writeKeyEvent.
             if (down) {
                 rdpcomm.writeKeyEvent(keyCode, metaState, down);
-                evt = injectMetaState(evt, metaState);
-                lastDownMetaState = metaState;
+                rdpcomm.remoteKeyboardState.recordKeyDownMetaState(keyCode, metaState);
             } else {
-                rdpcomm.writeKeyEvent(keyCode, lastDownMetaState, down);
-                evt = injectMetaState(evt, lastDownMetaState);
-                lastDownMetaState = 0;
+                metaState = rdpcomm.remoteKeyboardState.consumeKeyUpMetaState(keyCode, metaState);
+                rdpcomm.writeKeyEvent(keyCode, metaState, down);
             }
+            int eventMetaState = (evt.getMetaState() & ~KeyEvent.META_SHIFT_MASK) | metaState;
+            evt = replaceMetaState(evt, eventMetaState);
 
             if (keyCode == 0 && evt.getCharacters() != null /*KEYCODE_UNKNOWN*/) {
                 String s = evt.getCharacters();

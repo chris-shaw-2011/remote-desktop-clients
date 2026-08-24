@@ -388,6 +388,20 @@ public abstract class RemoteKeyboard {
         return evt;
     }
 
+    protected KeyEvent replaceMetaState(KeyEvent event, int metaState) {
+        String characters = event.getCharacters();
+        if (characters != null)
+            return new KeyEvent(event.getEventTime(), characters, event.getDeviceId(), event.getFlags());
+        return new KeyEvent(event.getDownTime(),
+                event.getEventTime(),
+                event.getAction(),
+                event.getKeyCode(),
+                event.getRepeatCount(),
+                metaState,
+                event.getDeviceId(),
+                event.getScanCode());
+    }
+
     public boolean shouldDropModifierKeys(KeyEvent event) {
         int keyCode = event.getKeyCode();
         boolean shouldDrop = false;
