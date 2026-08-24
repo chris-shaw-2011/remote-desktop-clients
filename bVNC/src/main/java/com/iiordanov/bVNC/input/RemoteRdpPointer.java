@@ -59,14 +59,12 @@ public class RemoteRdpPointer extends RemotePointer {
 
     @Override
     public void scrollUp(int x, int y, int metaState) {
-        pointerMask = MOUSE_BUTTON_SCROLL_UP | POINTER_DOWN_MASK;
-        sendPointerEvent(x, y, metaState, false);
+        sendWheelEvent(x, y, metaState, MOUSE_BUTTON_SCROLL_UP);
     }
 
     @Override
     public void scrollDown(int x, int y, int metaState) {
-        pointerMask = MOUSE_BUTTON_SCROLL_DOWN | POINTER_DOWN_MASK;
-        sendPointerEvent(x, y, metaState, false);
+        sendWheelEvent(x, y, metaState, MOUSE_BUTTON_SCROLL_DOWN);
     }
 
     @Override
@@ -77,6 +75,11 @@ public class RemoteRdpPointer extends RemotePointer {
     @Override
     public void scrollRight(int x, int y, int metaState) {
         // TODO: Protocol does not support scrolling left/right yet.
+    }
+
+    @Override
+    public boolean hasStatelessScrollEvents() {
+        return true;
     }
 
     @Override
@@ -102,6 +105,16 @@ public class RemoteRdpPointer extends RemotePointer {
         pointerMask = MOUSE_BUTTON_MOVE;
         sendPointerEvent(x, y, metaState, false);
         prevPointerMask = 0;
+    }
+
+    private void sendWheelEvent(int x, int y, int metaState, int wheelFlags) {
+        if (canvas != null) {
+            canvas.invalidateMousePosition();
+            setNewPointerPosition(x, y);
+            int combinedMetaState = metaState | remoteInput.getKeyboard().getMetaState();
+            protocomm.writePointerEvent(pointerX, pointerY, combinedMetaState, wheelFlags, false);
+            canvas.invalidateMousePosition();
+        }
     }
 
     /**

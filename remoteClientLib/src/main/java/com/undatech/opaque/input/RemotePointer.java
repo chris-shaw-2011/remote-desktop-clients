@@ -217,6 +217,10 @@ public abstract class RemotePointer {
 
     abstract public void scrollRight(int x, int y, int metaState);
 
+    public boolean hasStatelessScrollEvents() {
+        return false;
+    }
+
     abstract public void releaseButton(int x, int y, int metaState);
 
     abstract public void moveMouse(int x, int y, int metaState);
