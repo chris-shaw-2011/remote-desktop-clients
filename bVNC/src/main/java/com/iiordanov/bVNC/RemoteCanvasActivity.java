@@ -69,7 +69,6 @@ import androidx.viewpager.widget.ViewPager;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.res.ResourcesCompat;
 import androidx.core.view.ViewCompat;
@@ -97,6 +96,7 @@ import com.iiordanov.bVNC.protocol.RemoteConnection;
 import com.iiordanov.bVNC.protocol.RemoteConnectionFactory;
 import com.iiordanov.util.SamsungDexUtils;
 import com.undatech.opaque.Connection;
+import com.undatech.opaque.NormalizedScrollActivity;
 import com.undatech.opaque.RemoteClientLibConstants;
 import com.undatech.opaque.dialogs.SelectTextElementFragment;
 import com.undatech.opaque.util.GeneralUtils;
@@ -112,7 +112,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 @SuppressLint("ClickableViewAccessibility")
-public class RemoteCanvasActivity extends AppCompatActivity implements
+public class RemoteCanvasActivity extends NormalizedScrollActivity implements
         SelectTextElementFragment.OnFragmentDismissedListener, TouchInputDelegate {
 
     public static final int[] inputModeIds = {R.id.itemInputTouchpad,
