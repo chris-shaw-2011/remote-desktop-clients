@@ -3,9 +3,9 @@ package com.iiordanov.bVNC;
 import android.os.Bundle;
 
 import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.app.AppCompatActivity;
+import com.undatech.opaque.NormalizedScrollActivity;
 
-public class GlobalPreferencesActivity extends AppCompatActivity {
+public class GlobalPreferencesActivity extends NormalizedScrollActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

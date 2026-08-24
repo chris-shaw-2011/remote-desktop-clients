@@ -29,11 +29,11 @@ import android.widget.TextView;
 import android.widget.ToggleButton;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.snackbar.Snackbar;
 import com.iiordanov.pubkeygenerator.GeneratePubkeyActivity;
+import com.undatech.opaque.NormalizedScrollActivity;
 import com.undatech.opaque.util.LogcatReader;
 import com.undatech.remoteClientUi.R;
 
@@ -43,7 +43,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Locale;
 
-public abstract class MainConfiguration extends AppCompatActivity {
+public abstract class MainConfiguration extends NormalizedScrollActivity {
     private final static String TAG = "MainConfiguration";
     protected ConnectionBean selected;
     private boolean prefillApplied = false;
