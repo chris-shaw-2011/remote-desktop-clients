@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="system_key_capture_title">Capture Windows key</string>
+    <string name="system_key_capture_summary">Enable the aRDP service so Windows-key shortcuts go to the remote session instead of Quest</string>
+    <string name="system_key_capture_description">Captures Windows-key events only while an aRDP remote session has focus, before Quest handles them as system shortcuts.</string>
+</resources>

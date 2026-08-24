@@ -290,9 +290,7 @@ abstract public class RemoteConnection implements PointerInputHandler, KeyInputH
         maintainConnection = false;
 
         if (keyboard != null) {
-            // Tell the server to release any meta keys.
-            keyboard.clearMetaState();
-            keyboard.keyEvent(0, new KeyEvent(KeyEvent.ACTION_UP, 0));
+            keyboard.releaseAllKeys();
         }
         // Close the rfb connection.
         if (rfbConn != null) {

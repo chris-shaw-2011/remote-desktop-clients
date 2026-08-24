@@ -34,161 +34,59 @@ public class RemoteKeyboardState {
     }
 
     public void detectHardwareMetaState(KeyEvent event) {
-        int keyCode = event.getKeyCode();
-        int scanCode = event.getScanCode();
+        int modifier = getHardwareModifier(event.getKeyCode(), event.getScanCode());
+        if (modifier == 0)
+            return;
         boolean down = event.getAction() == KeyEvent.ACTION_DOWN || event.getAction() == KeyEvent.ACTION_MULTIPLE;
+        updateHardwareModifier(modifier, down);
+        GeneralUtils.debugLog(this.debugLogging, TAG,
+                "detected hardware modifier " + modifier + ", down: " + down);
+    }
 
-        if (!down) {
-            switch (scanCode) {
-                case RemoteKeyboard.SCAN_LEFTCTRL:
-                    hardwareMetaState &= ~RemoteKeyboard.CTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LCTRL scanCode, down:" + down);
-                    break;
-                case RemoteKeyboard.SCAN_RIGHTCTRL:
-                    hardwareMetaState &= ~RemoteKeyboard.RCTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RCTRL scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_LEFTALT:
-                    hardwareMetaState &= ~RemoteKeyboard.ALT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LALT scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_RIGHTALT:
-                    hardwareMetaState &= ~RemoteKeyboard.RALT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RALT scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_LEFTSHIFT:
-                    hardwareMetaState &= ~RemoteKeyboard.SHIFT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LSHIFT scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_RIGHTSHIFT:
-                    hardwareMetaState &= ~RemoteKeyboard.RSHIFT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RSHIFT scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_LEFTSUPER:
-                    hardwareMetaState &= ~RemoteKeyboard.SUPER_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LSUPER scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_RIGHTSUPER:
-                    hardwareMetaState &= ~RemoteKeyboard.RSUPER_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RSUPER scanCode, down: " + down);
-                    break;
-            }
-
-            switch (keyCode) {
-                case KeyEvent.KEYCODE_CTRL_LEFT:
-                    hardwareMetaState &= ~RemoteKeyboard.CTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LCTRL keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_CTRL_RIGHT:
-                    hardwareMetaState &= ~RemoteKeyboard.RCTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RCTRL keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_ALT_LEFT:
-                    hardwareMetaState &= ~RemoteKeyboard.ALT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LALT keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_ALT_RIGHT:
-                    hardwareMetaState &= ~RemoteKeyboard.RALT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RALT keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_SHIFT_LEFT:
-                    hardwareMetaState &= ~RemoteKeyboard.SHIFT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LSHIFT keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_SHIFT_RIGHT:
-                    hardwareMetaState &= ~RemoteKeyboard.RSHIFT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RSHIFT keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_META_LEFT:
-                    hardwareMetaState &= ~RemoteKeyboard.SUPER_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LSUPER keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_META_RIGHT:
-                    hardwareMetaState &= ~RemoteKeyboard.RSUPER_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RSUPER keyCode, down: " + down);
-                    break;
-
-                case KeyEvent.KEYCODE_DPAD_CENTER:
-                    hardwareMetaState &= ~RemoteKeyboard.CTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LCTRL via DPAD keyCode, down: " + down);
-                    break;
-            }
-        } else {
-            switch (scanCode) {
-                case RemoteKeyboard.SCAN_LEFTCTRL:
-                    hardwareMetaState |= RemoteKeyboard.CTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LCTRL scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_RIGHTCTRL:
-                    hardwareMetaState |= RemoteKeyboard.RCTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RCTRL scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_LEFTALT:
-                    hardwareMetaState |= RemoteKeyboard.ALT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LALT scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_RIGHTALT:
-                    hardwareMetaState |= RemoteKeyboard.RALT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RALT scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_LEFTSHIFT:
-                    hardwareMetaState |= RemoteKeyboard.SHIFT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LSHIFT scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_RIGHTSHIFT:
-                    hardwareMetaState |= RemoteKeyboard.RSHIFT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RSHIFT scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_LEFTSUPER:
-                    hardwareMetaState |= RemoteKeyboard.SUPER_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LSUPER scanCode, down: " + down);
-                    break;
-                case RemoteKeyboard.SCAN_RIGHTSUPER:
-                    hardwareMetaState |= RemoteKeyboard.RSUPER_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RSUPER scanCode, down: " + down);
-                    break;
-            }
-
-            switch (keyCode) {
-                case KeyEvent.KEYCODE_CTRL_LEFT:
-                    hardwareMetaState |= RemoteKeyboard.CTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LCTRL keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_CTRL_RIGHT:
-                    hardwareMetaState |= RemoteKeyboard.RCTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RCTRL keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_ALT_LEFT:
-                    hardwareMetaState |= RemoteKeyboard.ALT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LALT keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_ALT_RIGHT:
-                    hardwareMetaState |= RemoteKeyboard.RALT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RALT keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_SHIFT_LEFT:
-                    hardwareMetaState |= RemoteKeyboard.SHIFT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LSHIFT keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_SHIFT_RIGHT:
-                    hardwareMetaState |= RemoteKeyboard.RSHIFT_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RSHIFT keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_META_LEFT:
-                    hardwareMetaState |= RemoteKeyboard.SUPER_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LSUPER keyCode, down: " + down);
-                    break;
-                case KeyEvent.KEYCODE_META_RIGHT:
-                    hardwareMetaState |= RemoteKeyboard.RSUPER_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware RSUPER keyCode, down: " + down);
-                    break;
-
-                case KeyEvent.KEYCODE_DPAD_CENTER:
-                    hardwareMetaState |= RemoteKeyboard.CTRL_MASK;
-                    GeneralUtils.debugLog(this.debugLogging, TAG, "detected hardware LCTRL via DPAD keyCode, down: " + down);
-                    break;
-            }
+    private int getHardwareModifier(int keyCode, int scanCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_CTRL_LEFT: return RemoteKeyboard.CTRL_MASK;
+            case KeyEvent.KEYCODE_CTRL_RIGHT: return RemoteKeyboard.RCTRL_MASK;
+            case KeyEvent.KEYCODE_ALT_LEFT: return RemoteKeyboard.ALT_MASK;
+            case KeyEvent.KEYCODE_ALT_RIGHT: return RemoteKeyboard.RALT_MASK;
+            case KeyEvent.KEYCODE_SHIFT_LEFT: return RemoteKeyboard.SHIFT_MASK;
+            case KeyEvent.KEYCODE_SHIFT_RIGHT: return RemoteKeyboard.RSHIFT_MASK;
+            case KeyEvent.KEYCODE_META_LEFT: return RemoteKeyboard.SUPER_MASK;
+            case KeyEvent.KEYCODE_META_RIGHT: return RemoteKeyboard.RSUPER_MASK;
+            case KeyEvent.KEYCODE_DPAD_CENTER: return RemoteKeyboard.CTRL_MASK;
         }
+        switch (scanCode) {
+            case RemoteKeyboard.SCAN_LEFTCTRL: return RemoteKeyboard.CTRL_MASK;
+            case RemoteKeyboard.SCAN_RIGHTCTRL: return RemoteKeyboard.RCTRL_MASK;
+            case RemoteKeyboard.SCAN_LEFTALT: return RemoteKeyboard.ALT_MASK;
+            case RemoteKeyboard.SCAN_RIGHTALT: return RemoteKeyboard.RALT_MASK;
+            case RemoteKeyboard.SCAN_LEFTSHIFT: return RemoteKeyboard.SHIFT_MASK;
+            case RemoteKeyboard.SCAN_RIGHTSHIFT: return RemoteKeyboard.RSHIFT_MASK;
+            case RemoteKeyboard.SCAN_LEFTSUPER: return RemoteKeyboard.SUPER_MASK;
+            case RemoteKeyboard.SCAN_RIGHTSUPER: return RemoteKeyboard.RSUPER_MASK;
+            default: return 0;
+        }
+    }
+
+    void updateHardwareModifier(int modifier, boolean down) {
+        if (down)
+            hardwareMetaState |= modifier;
+        else
+            hardwareMetaState &= ~modifier;
+    }
+
+    public boolean isHardwareModifierActive(int modifier) {
+        return (hardwareMetaState & modifier) != 0;
+    }
+
+    public boolean isRemoteModifierActive(int modifier) {
+        return (remoteKeyboardMetaState & modifier) != 0;
+    }
+
+    public Boolean getModifierStateChange(int softwareMetaState, int modifier, boolean beforeInput) {
+        int targetMetaState = hardwareMetaState | (beforeInput ? softwareMetaState : 0);
+        boolean targetState = (targetMetaState & modifier) != 0;
+        return targetState == isRemoteModifierActive(modifier) ? null : targetState;
     }
 
     public boolean shouldSendModifier(int softwareMetaState,
@@ -219,5 +117,10 @@ public class RemoteKeyboardState {
         } else {
             remoteKeyboardMetaState &= ~modifier;
         }
+    }
+
+    public void clear() {
+        remoteKeyboardMetaState = 0;
+        hardwareMetaState = 0;
     }
 }

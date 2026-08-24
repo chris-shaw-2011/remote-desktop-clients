@@ -1,0 +1,93 @@
+diff --git a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
+--- a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
++++ b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
+@@ -155,10 +155,11 @@ public class LibFreeRDP
+ 
+ 	private static native boolean freerdp_send_resize_event(long inst, int width, int height);
+ 
+-	private static native boolean freerdp_send_key_event(long inst, int keycode, boolean down);
++	private static native boolean freerdp_send_key_event(long inst, int keycode, boolean down,
++	                                                     boolean repeat);
+ 
+ 	private static native boolean freerdp_send_unicodekey_event(long inst, int keycode,
+-	                                                            boolean down);
++	                                                            boolean down, boolean repeat);
+ 
+ 	private static native boolean freerdp_send_clipboard_data(long inst, String data);
+ 
+@@ -507,14 +508,24 @@ public class LibFreeRDP
+ 		return freerdp_send_resize_event(inst, width, height);
+ 	}
+ 
+-	public static boolean sendKeyEvent(long inst, int keycode, boolean down)
++	public static boolean sendKeyEvent(long inst, int keycode, boolean down, boolean repeat)
+ 	{
+-		return freerdp_send_key_event(inst, keycode, down);
++		return freerdp_send_key_event(inst, keycode, down, repeat);
+ 	}
++
++	public static boolean sendKeyEvent(long inst, int keycode, boolean down)
++	{
++		return sendKeyEvent(inst, keycode, down, false);
++	}
+ 
+-	public static boolean sendUnicodeKeyEvent(long inst, int keycode, boolean down)
++	public static boolean sendUnicodeKeyEvent(long inst, int keycode, boolean down, boolean repeat)
+ 	{
+-		return freerdp_send_unicodekey_event(inst, keycode, down);
++		return freerdp_send_unicodekey_event(inst, keycode, down, repeat);
+ 	}
++
++	public static boolean sendUnicodeKeyEvent(long inst, int keycode, boolean down)
++	{
++		return sendUnicodeKeyEvent(inst, keycode, down, false);
++	}
+ 
+ 	public static boolean sendClipboardData(long inst, String data)
+diff --git a/client/Android/android_freerdp.c b/client/Android/android_freerdp.c
+--- a/client/Android/android_freerdp.c
++++ b/client/Android/android_freerdp.c
+@@ -955,13 +955,14 @@ static jboolean JNICALL jni_freerdp_update_graphics(JNIEnv* env, jclass cls, jlo
+ }
+ 
+ static jboolean JNICALL jni_freerdp_send_key_event(JNIEnv* env, jclass cls, jlong instance,
+-                                                   jint keycode, jboolean down)
++                                                   jint keycode, jboolean down, jboolean repeat)
+ {
+ 	DWORD scancode;
+ 	ANDROID_EVENT* event;
+ 	freerdp* inst = (freerdp*)instance;
+ 	scancode = GetVirtualScanCodeFromVirtualKeyCode(keycode, 4);
+-	int flags = (down == JNI_TRUE) ? KBD_FLAGS_DOWN : KBD_FLAGS_RELEASE;
++	int flags = (down == JNI_TRUE) ? ((repeat == JNI_TRUE) ? KBD_FLAGS_DOWN : 0)
++	                                     : KBD_FLAGS_RELEASE;
+ 	flags |= (scancode & KBDEXT) ? KBD_FLAGS_EXTENDED : 0;
+ 	event = (ANDROID_EVENT*)android_event_key_new(flags, scancode & 0xFF);
+ 
+@@ -979,11 +980,13 @@ static jboolean JNICALL jni_freerdp_send_key_event(JNIEnv* env, jclass cls, jlon
+ }
+ 
+ static jboolean JNICALL jni_freerdp_send_unicodekey_event(JNIEnv* env, jclass cls, jlong instance,
+-                                                          jint keycode, jboolean down)
++                                                          jint keycode, jboolean down,
++                                                          jboolean repeat)
+ {
+ 	ANDROID_EVENT* event;
+ 	freerdp* inst = (freerdp*)instance;
+-	UINT16 flags = (down == JNI_TRUE) ? 0 : KBD_FLAGS_RELEASE;
++	UINT16 flags = (down == JNI_TRUE) ? ((repeat == JNI_TRUE) ? KBD_FLAGS_DOWN : 0)
++	                                        : KBD_FLAGS_RELEASE;
+ 	event = (ANDROID_EVENT*)android_event_unicodekey_new(flags, keycode);
+ 
+ 	if (!event)
+@@ -1122,8 +1124,8 @@ static JNINativeMethod methods[] = {
+ 	  &jni_freerdp_update_graphics },
+ 	{ "freerdp_send_cursor_event", "(JIII)Z", &jni_freerdp_send_cursor_event },
+ 	{ "freerdp_send_resize_event", "(JII)Z", &jni_freerdp_send_resize_event },
+-	{ "freerdp_send_key_event", "(JIZ)Z", &jni_freerdp_send_key_event },
+-	{ "freerdp_send_unicodekey_event", "(JIZ)Z", &jni_freerdp_send_unicodekey_event },
++	{ "freerdp_send_key_event", "(JIZZ)Z", &jni_freerdp_send_key_event },
++	{ "freerdp_send_unicodekey_event", "(JIZZ)Z", &jni_freerdp_send_unicodekey_event },
+ 	{ "freerdp_send_clipboard_data", "(JLjava/lang/String;)Z", &jni_freerdp_send_clipboard_data },
+ 	{ "freerdp_has_h264", "()Z", &jni_freerdp_has_h264 }
+ };

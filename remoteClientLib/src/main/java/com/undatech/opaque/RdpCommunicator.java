@@ -19,6 +19,11 @@ import com.undatech.opaque.util.GeneralUtils;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -64,6 +69,8 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
                 return thread;
             }
     );
+    private final Set<Integer> pressedVirtualKeys = new LinkedHashSet<>();
+    private final Set<Integer> pressedUnicodeKeys = new LinkedHashSet<>();
 
     public RdpCommunicator(Connection connection,
                            Context context, Handler handler, Viewable viewable,
@@ -194,6 +201,28 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         d.start();
     }
 
+    public synchronized void releaseAllKeys() {
+        metaState = 0;
+        releaseKeys(pressedUnicodeKeys, true);
+        releaseKeys(pressedVirtualKeys, false);
+        remoteKeyboardState.clear();
+    }
+
+    private void releaseKeys(Set<Integer> pressedKeys, boolean unicode) {
+        List<Integer> keys;
+        synchronized (pressedKeys) {
+            keys = new ArrayList<>(pressedKeys);
+            pressedKeys.clear();
+        }
+        Collections.reverse(keys);
+        for (int key : keys) {
+            if (unicode)
+                runMethodOnInputThread(() -> sendUnicodeKey(key, false, false));
+            else
+                runMethodOnInputThread(() -> sendKeyEvent(key, false, false));
+        }
+    }
+
     @Override
     public boolean isCertificateAccepted() {
         return certificateAccepted;
@@ -218,57 +247,124 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         }
     }
 
+    private void synchronizeModifierKeys(boolean beforeInput) {
+        for (int modifierMask : modifierMap.keySet()) {
+            Boolean targetState = remoteKeyboardState.getModifierStateChange(
+                    metaState, modifierMask, beforeInput);
+            if (targetState != null) {
+                Integer modifier = modifierMap.get(modifierMask);
+                if (modifier != null) {
+                    sendKeyEventOnNewThread(modifier, targetState);
+                    remoteKeyboardState.updateRemoteMetaState(modifierMask, targetState);
+                }
+            }
+        }
+    }
+
+    private int getModifierMask(int virtualKeyCode) {
+        switch (virtualKeyCode) {
+            case VK_LCONTROL:
+                return RemoteKeyboard.CTRL_MASK;
+            case VK_RCONTROL | VK_EXT_KEY:
+                return RemoteKeyboard.RCTRL_MASK;
+            case VK_LMENU:
+                return RemoteKeyboard.ALT_MASK;
+            case VK_RMENU | VK_EXT_KEY:
+                return RemoteKeyboard.RALT_MASK;
+            case VK_LSHIFT:
+                return RemoteKeyboard.SHIFT_MASK;
+            case VK_RSHIFT:
+                return RemoteKeyboard.RSHIFT_MASK;
+            case VK_LWIN | VK_EXT_KEY:
+                return RemoteKeyboard.SUPER_MASK;
+            case VK_RWIN | VK_EXT_KEY:
+                return RemoteKeyboard.RSUPER_MASK;
+            default:
+                return 0;
+        }
+    }
+
     // ****************************************************************************
     // KeyboardMapper.KeyProcessingListener implementation
     @Override
     public void processVirtualKey(int virtualKeyCode, boolean down) {
+        processVirtualKey(virtualKeyCode, down, false);
+    }
+
+    @Override
+    public void processVirtualKey(int virtualKeyCode, boolean down, boolean repeat) {
         GeneralUtils.debugLog(this.debugLogging, TAG, "processVirtualKey: " +
-                "Processing VK key: " + virtualKeyCode + ". Is it down: " + down);
+                "Processing VK key: " + virtualKeyCode + ". Is it down: " + down +
+                ". Is it repeat: " + repeat);
 
-        if (down) {
-            sendModifierKeys(true);
+        int modifierMask = getModifierMask(virtualKeyCode);
+        if (modifierMask != 0) {
+            sendKeyEventOnNewThread(virtualKeyCode, down, repeat);
+            remoteKeyboardState.updateRemoteMetaState(modifierMask, down);
+            return;
         }
-        sendKeyEventOnNewThread(virtualKeyCode, down);
 
-        if (!down) {
-            sendModifierKeys(false);
-        }
+        if (down)
+            synchronizeModifierKeys(true);
+        sendKeyEventOnNewThread(virtualKeyCode, down, repeat);
+        if (!down)
+            synchronizeModifierKeys(false);
     }
 
     private void sendKeyEventOnNewThread(int virtualKeyCode, boolean down) {
-        runMethodOnInputThread(() -> sendKeyEvent(virtualKeyCode, down));
+        sendKeyEventOnNewThread(virtualKeyCode, down, false);
     }
 
-    private synchronized void sendKeyEvent(int virtualKeyCode, boolean down) {
+    private void sendKeyEventOnNewThread(int virtualKeyCode, boolean down, boolean repeat) {
+        recordPressedKey(pressedVirtualKeys, virtualKeyCode, down);
+        runMethodOnInputThread(() -> sendKeyEvent(virtualKeyCode, down, repeat));
+    }
+
+    private synchronized void sendKeyEvent(int virtualKeyCode, boolean down, boolean repeat) {
         sleepBetweenInputEvents(5);
-        LibFreeRDP.sendKeyEvent(session.getInstance(), virtualKeyCode, down);
+        LibFreeRDP.sendKeyEvent(session.getInstance(), virtualKeyCode, down, repeat);
     }
 
     @Override
     public void processUnicodeKey(int unicodeKey, boolean down, boolean suppressMetaState) {
-        GeneralUtils.debugLog(this.debugLogging, TAG, "processUnicodeKey: " +
-                "Processing unicode key: " + unicodeKey + ", down: " + down +
-                ", metaState: " + metaState + ", suppressMetaState: " + suppressMetaState);
-        if (down && !suppressMetaState) {
-            sendModifierKeys(true);
-        }
-        sendUnicodeKeyOnNewThread(unicodeKey, down);
-        if (!down && !suppressMetaState) {
-            sendModifierKeys(false);
-        }
+        processUnicodeKey(unicodeKey, down, suppressMetaState, false);
     }
 
-    private void sendUnicodeKeyOnNewThread(int unicodeKey, boolean down) {
-        runMethodOnInputThread(() -> sendUnicodeKey(unicodeKey, down));
+    @Override
+    public void processUnicodeKey(int unicodeKey, boolean down, boolean suppressMetaState,
+                                  boolean repeat) {
+        GeneralUtils.debugLog(this.debugLogging, TAG, "processUnicodeKey: " +
+                "Processing unicode key: " + unicodeKey + ", down: " + down +
+                ", repeat: " + repeat + ", metaState: " + metaState +
+                ", suppressMetaState: " + suppressMetaState);
+        if (down && !suppressMetaState)
+            synchronizeModifierKeys(true);
+        sendUnicodeKeyOnNewThread(unicodeKey, down, repeat);
+        if (!down && !suppressMetaState)
+            synchronizeModifierKeys(false);
+    }
+
+    private void sendUnicodeKeyOnNewThread(int unicodeKey, boolean down, boolean repeat) {
+        recordPressedKey(pressedUnicodeKeys, unicodeKey, down);
+        runMethodOnInputThread(() -> sendUnicodeKey(unicodeKey, down, repeat));
+    }
+
+    private void recordPressedKey(Set<Integer> pressedKeys, int key, boolean down) {
+        synchronized (pressedKeys) {
+            if (down)
+                pressedKeys.add(key);
+            else
+                pressedKeys.remove(key);
+        }
     }
 
     private void runMethodOnInputThread(Runnable runnable) {
         inputExecutor.submit(runnable);
     }
 
-    private synchronized void sendUnicodeKey(int unicodeKey, boolean down) {
+    private synchronized void sendUnicodeKey(int unicodeKey, boolean down, boolean repeat) {
         sleepBetweenInputEvents(5);
-        LibFreeRDP.sendUnicodeKeyEvent(session.getInstance(), unicodeKey, down);
+        LibFreeRDP.sendUnicodeKeyEvent(session.getInstance(), unicodeKey, down, repeat);
     }
 
     private static void sleepBetweenInputEvents(int millis) {
