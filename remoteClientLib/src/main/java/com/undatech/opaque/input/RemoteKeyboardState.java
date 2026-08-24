@@ -189,6 +189,34 @@ public class RemoteKeyboardState {
                     break;
             }
         }
+
+        reconcileHardwareShiftState(keyCode, event.getMetaState());
+    }
+
+    void reconcileHardwareShiftState(int keyCode, int eventMetaState) {
+        if (keyCode != KeyEvent.KEYCODE_SHIFT_LEFT && keyCode != KeyEvent.KEYCODE_SHIFT_RIGHT) {
+            hardwareMetaState &= ~(RemoteKeyboard.SHIFT_MASK | RemoteKeyboard.RSHIFT_MASK);
+            if ((eventMetaState & KeyEvent.META_SHIFT_RIGHT_ON) != 0) {
+                hardwareMetaState |= RemoteKeyboard.RSHIFT_MASK;
+            } else if ((eventMetaState & KeyEvent.META_SHIFT_MASK) != 0) {
+                hardwareMetaState |= RemoteKeyboard.SHIFT_MASK;
+            }
+        }
+    }
+
+    public boolean isHardwareModifierActive(int modifier) {
+        return (hardwareMetaState & modifier) != 0;
+    }
+
+    public boolean isRemoteModifierActive(int modifier) {
+        return (remoteKeyboardMetaState & modifier) != 0;
+    }
+
+    public Boolean getModifierStateChange(int softwareMetaState, int modifier, boolean beforeInput) {
+        boolean targetState = beforeInput
+                ? (softwareMetaState & modifier) != 0
+                : isHardwareModifierActive(modifier);
+        return targetState == isRemoteModifierActive(modifier) ? null : targetState;
     }
 
     public boolean shouldSendModifier(int softwareMetaState,
