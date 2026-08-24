@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:fitsSystemWindows="true"
     android:paddingRight="26dip"
     >
@@ -44,6 +45,14 @@
         android:key="scrollSpeed"
         android:max="20"
         android:title="@string/scroll_speed" />
+    <SeekBarPreference
+        android:defaultValue="100"
+        android:key="mouseWheelScrollMultiplier"
+        android:max="200"
+        android:title="@string/mouse_wheel_scroll_multiplier"
+        app:min="5"
+        app:seekBarIncrement="5"
+        app:showSeekBarValue="true" />
     <SeekBarPreference
         android:defaultValue="4"
         android:key="touchpadSensitivity"
