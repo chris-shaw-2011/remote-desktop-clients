@@ -1,6 +1,8 @@
 package com.iiordanov.bVNC;
 
+import android.content.Intent;
 import android.os.Bundle;
+import android.provider.Settings;
 
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
@@ -25,6 +27,10 @@ public class GlobalPreferencesFragment extends PreferenceFragmentCompat {
     public boolean onPreferenceTreeClick(Preference preference) {
         if ("openDefaultConnectionSettings".equals(preference.getKey())) {
             Utils.openDefaultConnectionSettings(requireContext());
+            return true;
+        }
+        if ("openSystemKeyCaptureSettings".equals(preference.getKey())) {
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
             return true;
         }
         return super.onPreferenceTreeClick(preference);
