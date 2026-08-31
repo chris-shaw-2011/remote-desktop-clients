@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
-      changed: ${{ steps.merge.outputs.changed }}
-      source_sha: ${{ steps.merge.outputs.source_sha }}
+      changed: ${{ steps.rebase.outputs.changed }}
+      source_sha: ${{ steps.rebase.outputs.source_sha }}
 
     steps:
       - name: Check out fork default branch
@@ -27,19 +27,20 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
-      - name: Fetch and merge upstream/master
-        id: merge
+      - name: Fetch and rebase onto upstream/master
+        id: rebase
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         shell: bash
         run: |
           set -euo pipefail
 
+          old_head=$(git rev-parse HEAD)
           git remote add upstream https://github.com/iiordanov/remote-desktop-clients.git
           git fetch --no-tags upstream master
 
           if git merge-base --is-ancestor upstream/master HEAD; then
-            echo "No upstream commits need to be merged."
+            echo "No upstream commits need to be rebased."
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             exit 0
@@ -48,12 +49,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if ! git merge --no-ff --no-edit upstream/master; then
+          if ! git rebase upstream/master; then
             conflicts=$(git diff --name-only --diff-filter=U)
-            echo "::error::Automatic upstream merge conflicted. Resolve the listed files manually and rerun this workflow."
+            git rebase --abort
+            echo "::error::Automatic upstream rebase conflicted. Resolve the listed files manually and rerun this workflow."
             printf '%s\n' "$conflicts"
             {
-              echo "## Upstream merge conflict"
+              echo "## Upstream rebase conflict"
               echo
               echo "The workflow did not push or overwrite the fork branch. Resolve these files manually:"
               echo '```'
@@ -63,14 +65,16 @@ jobs:
             exit 1
           fi
 
-          git push origin "HEAD:$DEFAULT_BRANCH"
+          git push \
+            --force-with-lease="refs/heads/$DEFAULT_BRANCH:$old_head" \
+            origin "HEAD:$DEFAULT_BRANCH"
           source_sha=$(git rev-parse HEAD)
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
           {
             echo "## Upstream sync completed"
             echo
-            echo "Merged \`upstream/master\` into \`$DEFAULT_BRANCH\` at \`$source_sha\`."
+            echo "Rebased \`$DEFAULT_BRANCH\` onto \`upstream/master\` at \`$source_sha\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
   build:
