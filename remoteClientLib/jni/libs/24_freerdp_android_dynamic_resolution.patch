@@ -1,0 +1,243 @@
+--- a/client/Android/android_event.h
++++ b/client/Android/android_event.h
+@@ -19,6 +19,7 @@
+ #define EVENT_TYPE_DISCONNECT 3
+ #define EVENT_TYPE_KEY_UNICODE 4
+ #define EVENT_TYPE_CLIPBOARD 5
++#define EVENT_TYPE_RESIZE 6
+ 
+ struct _ANDROID_EVENT
+ {
+@@ -51,6 +52,14 @@
+ };
+ typedef struct _ANDROID_EVENT_CLIPBOARD ANDROID_EVENT_CLIPBOARD;
+ 
++struct _ANDROID_EVENT_RESIZE
++{
++	int type;
++	UINT32 width;
++	UINT32 height;
++};
++typedef struct _ANDROID_EVENT_RESIZE ANDROID_EVENT_RESIZE;
++
+ struct _ANDROID_EVENT_QUEUE
+ {
+ 	int size;
+@@ -70,6 +79,7 @@
+ FREERDP_LOCAL ANDROID_EVENT_CURSOR* android_event_cursor_new(UINT16 flags, UINT16 x, UINT16 y);
+ FREERDP_LOCAL ANDROID_EVENT* android_event_disconnect_new(void);
+ FREERDP_LOCAL ANDROID_EVENT_CLIPBOARD* android_event_clipboard_new(const void* data, size_t data_length);
++FREERDP_LOCAL ANDROID_EVENT_RESIZE* android_event_resize_new(UINT32 width, UINT32 height);
+ 
+ FREERDP_LOCAL void android_event_free(ANDROID_EVENT* event);
+ 
+--- a/client/Android/android_event.c
++++ b/client/Android/android_event.c
+@@ -125,6 +125,27 @@
+ 			android_cliprdr_send_client_format_list(afc->cliprdr);
+ 			android_event_free((ANDROID_EVENT*)clipboard_event);
+ 		}
++		else if (event->type == EVENT_TYPE_RESIZE)
++		{
++			ANDROID_EVENT_RESIZE* resize_event = (ANDROID_EVENT_RESIZE*)event;
++			if (afc->dispActivated && afc->disp)
++			{
++				DISPLAY_CONTROL_MONITOR_LAYOUT layout = { 0 };
++				rdpSettings* settings = context->settings;
++				layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
++				layout.Width = resize_event->width;
++				layout.Height = resize_event->height;
++				layout.PhysicalWidth = resize_event->width;
++				layout.PhysicalHeight = resize_event->height;
++				layout.Orientation = settings->DesktopOrientation;
++				layout.DesktopScaleFactor = settings->DesktopScaleFactor;
++				layout.DeviceScaleFactor = settings->DeviceScaleFactor;
++				if (IFCALLRESULT(CHANNEL_RC_OK, afc->disp->SendMonitorLayout, afc->disp, 1,
++				                 &layout) != CHANNEL_RC_OK)
++					WLog_WARN(TAG, "Failed to send display-control monitor layout");
++			}
++			android_event_free((ANDROID_EVENT*)resize_event);
++		}
+ 		else if (event->type == EVENT_TYPE_DISCONNECT)
+ 		{
+ 			android_event_free(event);
+@@ -276,6 +297,19 @@
+ 	return event;
+ }
+ 
++ANDROID_EVENT_RESIZE* android_event_resize_new(UINT32 width, UINT32 height)
++{
++	ANDROID_EVENT_RESIZE* event = (ANDROID_EVENT_RESIZE*)calloc(1, sizeof(ANDROID_EVENT_RESIZE));
++
++	if (!event)
++		return NULL;
++
++	event->type = EVENT_TYPE_RESIZE;
++	event->width = width;
++	event->height = height;
++	return event;
++}
++
+ static void android_event_clipboard_free(ANDROID_EVENT_CLIPBOARD* event)
+ {
+ 	if (event)
+@@ -392,6 +426,10 @@
+ 			android_event_clipboard_free((ANDROID_EVENT_CLIPBOARD*)event);
+ 			break;
+ 
++		case EVENT_TYPE_RESIZE:
++			free(event);
++			break;
++
+ 		default:
+ 			break;
+ 	}
+--- a/client/Android/android_freerdp.h
++++ b/client/Android/android_freerdp.h
+@@ -18,6 +18,7 @@
+ 
+ #include <freerdp/freerdp.h>
+ #include <freerdp/client/cliprdr.h>
++#include <freerdp/client/disp.h>
+ 
+ #include "android_event.h"
+ 
+@@ -38,6 +39,8 @@
+ 	CLIPRDR_FORMAT* serverFormats;
+ 	CliprdrClientContext* cliprdr;
+ 	UINT32 clipboardCapabilities;
++	DispClientContext* disp;
++	BOOL dispActivated;
+ };
+ typedef struct android_context androidContext;
+ 
+--- a/client/Android/android_freerdp.c
++++ b/client/Android/android_freerdp.c
+@@ -32,6 +32,7 @@
+ #include <freerdp/client/rdpei.h>
+ #include <freerdp/client/rdpgfx.h>
+ #include <freerdp/client/cliprdr.h>
++#include <freerdp/client/disp.h>
+ #include <freerdp/codec/h264.h>
+ #include <freerdp/channels/channels.h>
+ #include <freerdp/client/channels.h>
+@@ -56,6 +57,22 @@
+ 
+ #define TAG CLIENT_TAG("android")
+ 
++static UINT android_DisplayControlCaps(DispClientContext* disp, UINT32 maxNumMonitors,
++                                       UINT32 maxMonitorAreaFactorA,
++                                       UINT32 maxMonitorAreaFactorB)
++{
++	androidContext* afc = (androidContext*)disp->custom;
++	WLog_DBG(TAG,
++	         "DisplayControlCapsPdu: MaxNumMonitors: %" PRIu32
++	         " MaxMonitorAreaFactorA: %" PRIu32 " MaxMonitorAreaFactorB: %" PRIu32,
++	         maxNumMonitors, maxMonitorAreaFactorA, maxMonitorAreaFactorB);
++	if (!afc)
++		return CHANNEL_RC_BAD_INIT_HANDLE;
++
++	afc->dispActivated = TRUE;
++	return CHANNEL_RC_OK;
++}
++
+ /* Defines the JNI version supported by this library. */
+ #define FREERDP_JNI_VERSION "2.11.7"
+ 
+@@ -89,6 +106,12 @@
+ 	{
+ 		android_cliprdr_init(afc, (CliprdrClientContext*)e->pInterface);
+ 	}
++	else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0)
++	{
++		afc->disp = (DispClientContext*)e->pInterface;
++		afc->disp->custom = afc;
++		afc->disp->DisplayControlCaps = android_DisplayControlCaps;
++	}
+ }
+ 
+ static void android_OnChannelDisconnectedEventHandler(void* context,
+@@ -122,6 +145,11 @@
+ 	{
+ 		android_cliprdr_uninit(afc, (CliprdrClientContext*)e->pInterface);
+ 	}
++	else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0)
++	{
++		afc->disp = NULL;
++		afc->dispActivated = FALSE;
++	}
+ }
+ 
+ static BOOL android_begin_paint(rdpContext* context)
+@@ -1020,6 +1048,29 @@
+ 	return ret;
+ }
+ 
++static jboolean JNICALL jni_freerdp_send_resize_event(JNIEnv* env, jclass cls, jlong instance,
++                                                      jint width, jint height)
++{
++	ANDROID_EVENT* event;
++	freerdp* inst = (freerdp*)instance;
++	if ((width < DISPLAY_CONTROL_MIN_MONITOR_WIDTH) ||
++	    (width > DISPLAY_CONTROL_MAX_MONITOR_WIDTH) ||
++	    (height < DISPLAY_CONTROL_MIN_MONITOR_HEIGHT) ||
++	    (height > DISPLAY_CONTROL_MAX_MONITOR_HEIGHT))
++		return JNI_FALSE;
++
++	event = (ANDROID_EVENT*)android_event_resize_new(width, height);
++	if (!event)
++		return JNI_FALSE;
++
++	if (!android_push_event(inst, event))
++	{
++		android_event_free(event);
++		return JNI_FALSE;
++	}
++	return JNI_TRUE;
++}
++
+ static jstring JNICALL jni_freerdp_get_jni_version(JNIEnv* env, jclass cls)
+ {
+ 	return (*env)->NewStringUTF(env, FREERDP_JNI_VERSION);
+@@ -1070,6 +1121,7 @@
+ 	{ "freerdp_update_graphics", "(JLandroid/graphics/Bitmap;IIII)Z",
+ 	  &jni_freerdp_update_graphics },
+ 	{ "freerdp_send_cursor_event", "(JIII)Z", &jni_freerdp_send_cursor_event },
++	{ "freerdp_send_resize_event", "(JII)Z", &jni_freerdp_send_resize_event },
+ 	{ "freerdp_send_key_event", "(JIZ)Z", &jni_freerdp_send_key_event },
+ 	{ "freerdp_send_unicodekey_event", "(JIZ)Z", &jni_freerdp_send_unicodekey_event },
+ 	{ "freerdp_send_clipboard_data", "(JLjava/lang/String;)Z", &jni_freerdp_send_clipboard_data },
+--- a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
++++ b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
+@@ -153,6 +153,8 @@
+ 
+ 	private static native boolean freerdp_send_cursor_event(long inst, int x, int y, int flags);
+ 
++	private static native boolean freerdp_send_resize_event(long inst, int width, int height);
++
+ 	private static native boolean freerdp_send_key_event(long inst, int keycode, boolean down);
+ 
+ 	private static native boolean freerdp_send_unicodekey_event(long inst, int keycode,
+@@ -290,6 +292,10 @@
+ 
+ 		args.add(
+ 		    String.format("/size:%dx%d", screenSettings.getWidth(), screenSettings.getHeight()));
++		if (screenSettings.isAutomatic())
++		{
++			args.add("/dynamic-resolution");
++		}
+ 		args.add("/bpp:" + String.valueOf(screenSettings.getColors()));
+ 
+ 		if (advanced.getConsoleMode())
+@@ -496,6 +502,11 @@
+ 		return freerdp_send_cursor_event(inst, x, y, flags);
+ 	}
+ 
++	public static boolean sendResizeEvent(long inst, int width, int height)
++	{
++		return freerdp_send_resize_event(inst, width, height);
++	}
++
+ 	public static boolean sendKeyEvent(long inst, int keycode, boolean down)
+ 	{
+ 		return freerdp_send_key_event(inst, keycode, down);
