@@ -346,7 +346,9 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
     @Override
     public void requestResolution(int x, int y) {
-        // This functionality is not yet available for RDP
+        if (isInNormalProtocol && connection.isRequestingNewDisplayResolution()) {
+            LibFreeRDP.sendResizeEvent(session.getInstance(), x, y);
+        }
     }
 
     private void initSession(String rdpFileName, String username, String domain, String password) {
@@ -410,6 +412,9 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
         // Set screen settings to native res if instructed to, or if height or width are too small.
         BookmarkBase.ScreenSettings screenSettings = bookmark.getActiveScreenSettings();
+        screenSettings.setResolution(connection.isRequestingNewDisplayResolution()
+                ? BookmarkBase.ScreenSettings.AUTOMATIC
+                : BookmarkBase.ScreenSettings.CUSTOM);
         screenSettings.setDesktopScalePercentage(desktopScalePercentage);
         updateScreenSettings(remoteWidth, remoteHeight, colors);
 
@@ -657,7 +662,8 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     @Override
     public void OnGraphicsResize(int width, int height, int bpp) {
         Log.d(TAG, "OnGraphicsResize called " + width + "x" + height + ", bpp:" + bpp);
-        OnSettingsChanged(width, height, bpp);
+        updateScreenSettings(width, height, bpp);
+        viewable.reallocateDrawable(width, height);
     }
 
     @Override
