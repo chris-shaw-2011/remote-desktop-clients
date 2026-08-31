@@ -53,14 +53,15 @@ import com.iiordanov.android.bc.BCFactory;
 import com.iiordanov.bVNC.input.TouchInputHandlerTouchpad;
 import com.undatech.opaque.AbstractDrawableData;
 import com.undatech.opaque.Connection;
-import com.undatech.opaque.DrawableReallocatedListener;
 import com.undatech.opaque.RemoteClientLibConstants;
+import com.undatech.opaque.RfbConnectable;
 import com.undatech.opaque.Viewable;
 import com.undatech.opaque.input.RemotePointer;
 import com.undatech.remoteClientUi.R;
 
 public class RemoteCanvas extends AppCompatImageView implements Viewable {
     private final static String TAG = "RemoteCanvas";
+    private static final long RESOLUTION_RESIZE_DELAY_MS = 300;
 
     public AbstractScaling canvasZoomer;
 
@@ -138,7 +139,20 @@ public class RemoteCanvas extends AppCompatImageView implements Viewable {
      */
     CharSequence screenMessage;
 
-    DrawableReallocatedListener drawableReallocatedListener;
+    RfbConnectable drawableReallocatedListener;
+
+    private final Runnable resolutionResizeRequester = () -> {
+        if (drawableReallocatedListener == null || connection == null ||
+                !drawableReallocatedListener.isInNormalProtocol() ||
+                !connection.isRequestingNewDisplayResolution()) {
+            return;
+        }
+        try {
+            drawableReallocatedListener.requestResolution(getDesiredWidth(), getDesiredHeight());
+        } catch (Exception e) {
+            Log.w(TAG, "Unable to request resized remote resolution", e);
+        }
+    };
 
     /**
      * Shows a non-fatal error message.
@@ -193,7 +207,7 @@ public class RemoteCanvas extends AppCompatImageView implements Viewable {
     }
 
     public void setParameters(
-            DrawableReallocatedListener drawableReallocatedListener,
+            RfbConnectable drawableReallocatedListener,
             Connection connection,
             Handler handler,
             RemotePointer pointer,
@@ -980,11 +994,22 @@ public class RemoteCanvas extends AppCompatImageView implements Viewable {
      */
     @Override
     protected void onSizeChanged(int w, int h, int oldW, int oldH) {
+        super.onSizeChanged(w, h, oldW, oldH);
         if (w > 0 && h > 0) {
             synchronized (this) {
                 this.notify();
             }
         }
+        if (oldW > 0 && oldH > 0 && (w != oldW || h != oldH)) {
+            removeCallbacks(resolutionResizeRequester);
+            postDelayed(resolutionResizeRequester, RESOLUTION_RESIZE_DELAY_MS);
+        }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        removeCallbacks(resolutionResizeRequester);
+        super.onDetachedFromWindow();
     }
 
     @Override
