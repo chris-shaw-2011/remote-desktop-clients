@@ -1,0 +1,23 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.iiordanov.questadb'
+    compileSdkVersion compileApi
+
+    defaultConfig {
+        applicationId 'com.iiordanov.questadb'
+        minSdkVersion 34
+        targetSdkVersion targetApi
+        versionCode 1
+        versionName '1.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
