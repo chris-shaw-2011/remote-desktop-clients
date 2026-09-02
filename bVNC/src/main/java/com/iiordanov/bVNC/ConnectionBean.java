@@ -132,6 +132,7 @@ public class ConnectionBean extends AbstractConnectionBean implements Comparable
         setMetaListId(1);
         setRdpResType(0);
         setRdpWidth(0);
+        setRdpMonitorCount(1);
         setRdpHeight(0);
         setRdpColor(Constants.DEFAULT_RDP_COLOR_MODE);
         setRemoteFx(true);

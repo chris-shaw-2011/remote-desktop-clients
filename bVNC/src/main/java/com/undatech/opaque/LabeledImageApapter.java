@@ -26,6 +26,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -52,11 +53,14 @@ public class LabeledImageApapter extends BaseAdapter {
     private int numCols = 2;
     private String defaultLabel = "Untitled";
     private boolean doNotShowDesktopThumbnails = false;
+    private final View.OnLongClickListener connectionActionsListener;
 
-    public LabeledImageApapter(Context context, Map<String, Connection> connectionsByPosition, String[] filter, int maxNumCols) {
+    public LabeledImageApapter(Context context, Map<String, Connection> connectionsByPosition, String[] filter,
+                               int maxNumCols, View.OnLongClickListener connectionActionsListener) {
         this.context = context;
         this.numCols = maxNumCols;
         this.filter = filter;
+        this.connectionActionsListener = connectionActionsListener;
         if (connectionsByPosition != null) {
             for (Connection c : connectionsByPosition.values()) {
                 boolean include = true;
@@ -130,6 +134,13 @@ public class LabeledImageApapter extends BaseAdapter {
         // when the item is long-tapped or tapped respectively.
         TextView gridItemId = (TextView) gridView.findViewById(R.id.grid_item_id);
         gridItemId.setText(c.getRuntimeId());
+        gridView.setOnGenericMotionListener((view, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_BUTTON_PRESS
+                    && event.getActionButton() == MotionEvent.BUTTON_SECONDARY) {
+                return connectionActionsListener.onLongClick(view);
+            }
+            return false;
+        });
 
         return gridView;
     }

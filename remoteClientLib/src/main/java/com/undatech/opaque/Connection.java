@@ -226,6 +226,13 @@ public interface Connection {
 
     void setRdpWidth(int rdpWidth);
 
+    default int getRdpMonitorCount() {
+        return 1;
+    }
+
+    default void setRdpMonitorCount(int rdpMonitorCount) {
+    }
+
     int getRdpHeight();
 
     void setRdpHeight(int rdpHeight);
