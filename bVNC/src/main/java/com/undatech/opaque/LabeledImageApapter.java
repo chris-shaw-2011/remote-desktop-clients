@@ -53,7 +53,8 @@ public class LabeledImageApapter extends BaseAdapter {
     private String defaultLabel = "Untitled";
     private boolean doNotShowDesktopThumbnails = false;
 
-    public LabeledImageApapter(Context context, Map<String, Connection> connectionsByPosition, String[] filter, int maxNumCols) {
+    public LabeledImageApapter(Context context, Map<String, Connection> connectionsByPosition, String[] filter,
+                               int maxNumCols) {
         this.context = context;
         this.numCols = maxNumCols;
         this.filter = filter;

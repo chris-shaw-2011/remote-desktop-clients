@@ -1,0 +1,214 @@
+--- a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/domain/BookmarkBase.java
++++ b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/domain/BookmarkBase.java
+@@ -586,6 +586,7 @@
+ 		private int width;
+ 		private int height;
+ 		private int desktopScalePercentage;
++		private int monitorCount;
+ 
+ 		public ScreenSettings()
+ 		{
+@@ -598,6 +599,8 @@
+ 			colors = parcel.readInt();
+ 			width = parcel.readInt();
+ 			height = parcel.readInt();
++			desktopScalePercentage = parcel.readInt();
++			monitorCount = parcel.readInt();
+ 		}
+ 
+ 		private void validate()
+@@ -641,6 +644,11 @@
+ 			{
+ 				desktopScalePercentage = 100;
+ 			}
++
++			if ((monitorCount < 1) || (monitorCount > 16))
++			{
++				monitorCount = 1;
++			}
+ 		}
+ 
+ 		private void init()
+@@ -649,6 +657,8 @@
+ 			colors = 16;
+ 			width = 0;
+ 			height = 0;
++			desktopScalePercentage = 100;
++			monitorCount = 1;
+ 		}
+ 
+ 		public void setResolution(String resolution, int width, int height)
+@@ -771,6 +781,7 @@
+ 			out.writeInt(width);
+ 			out.writeInt(height);
+ 			out.writeInt(desktopScalePercentage);
++			out.writeInt(monitorCount);
+ 		}
+ 
+ 		public int getDesktopScalePercentage() {
+@@ -781,6 +792,15 @@
+ 		public void setDesktopScalePercentage(int desktopScalePercentage) {
+ 			this.desktopScalePercentage = desktopScalePercentage;
+ 		}
++
++		public int getMonitorCount() {
++			validate();
++			return monitorCount;
++		}
++
++		public void setMonitorCount(int monitorCount) {
++			this.monitorCount = monitorCount;
++		}
+ 	}
+ 
+ 	public static class DebugSettings implements Parcelable
+--- a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
++++ b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
+@@ -150,6 +150,12 @@
+ 
+ 	private static native boolean freerdp_update_graphics(long inst, Bitmap bitmap, int x, int y,
+ 	                                                      int width, int height);
++	private static native boolean freerdp_update_graphics_region(long inst, Bitmap bitmap,
++	                                                            int sourceX, int sourceY,
++	                                                            int destinationX, int destinationY,
++	                                                            int width, int height);
++	private static native boolean freerdp_set_monitor_layout(long inst, int count, int width,
++	                                                        int height);
+ 
+ 	private static native boolean freerdp_send_cursor_event(long inst, int x, int y, int flags);
+ 
+@@ -294,9 +300,13 @@
+ 		args.add(
+ 		    String.format("/size:%dx%d", screenSettings.getWidth(), screenSettings.getHeight()));
+-		if (screenSettings.isAutomatic())
++		if (screenSettings.isAutomatic() && screenSettings.getMonitorCount() == 1)
+ 		{
+ 			args.add("/dynamic-resolution");
+ 		}
++		if (screenSettings.getMonitorCount() > 1)
++		{
++			args.add("/multimon");
++		}
+ 		args.add("/bpp:" + String.valueOf(screenSettings.getColors()));
+ 
+ 		if (advanced.getConsoleMode())
+@@ -422,7 +432,11 @@
+ 		//args.add("/cert-ignore");
+ 		args.add("/log-level:" + debug.getDebugLevel());
+ 		String[] arrayArgs = args.toArray(new String[args.size()]);
+-		return freerdp_parse_arguments(inst, arrayArgs);
++		if (!freerdp_parse_arguments(inst, arrayArgs))
++			return false;
++		return screenSettings.getMonitorCount() == 1 ||
++		       freerdp_set_monitor_layout(inst, screenSettings.getMonitorCount(),
++		                                  screenSettings.getWidth(), screenSettings.getHeight());
+ 	}
+ 
+ 	public static boolean setConnectionInfo(Context context, long inst, Uri openUri)
+@@ -498,6 +512,14 @@
+ 		return freerdp_update_graphics(inst, bitmap, x, y, width, height);
+ 	}
+ 
++	public static boolean updateGraphicsRegion(long inst, Bitmap bitmap, int sourceX, int sourceY,
++	                                           int destinationX, int destinationY, int width,
++	                                           int height)
++	{
++		return freerdp_update_graphics_region(inst, bitmap, sourceX, sourceY, destinationX,
++		                                      destinationY, width, height);
++	}
++
+ 	public static boolean sendCursorEvent(long inst, int x, int y, int flags)
+ 	{
+ 		return freerdp_send_cursor_event(inst, x, y, flags);
+--- a/client/Android/android_freerdp.c
++++ b/client/Android/android_freerdp.c
+@@ -835,6 +835,39 @@
+ 	return (status == 0) ? JNI_TRUE : JNI_FALSE;
+ }
+ 
++static jboolean JNICALL jni_freerdp_set_monitor_layout(JNIEnv* env, jclass cls, jlong instance,
++                                                       jint count, jint width, jint height)
++{
++	freerdp* inst = (freerdp*)instance;
++	rdpSettings* settings;
++	int i;
++
++	if (!env || !cls || !inst || !inst->settings || count < 2 || count > 16 || width <= 0 ||
++	    height <= 0 || ((INT64)count * width) > 32766 || height > 32766)
++		return JNI_FALSE;
++
++	settings = inst->settings;
++	settings->UseMultimon = TRUE;
++	settings->Fullscreen = TRUE;
++	settings->MonitorCount = count;
++	settings->DesktopWidth = count * width;
++	settings->DesktopHeight = height;
++	ZeroMemory(settings->MonitorDefArray, settings->MonitorDefArraySize * sizeof(rdpMonitor));
++	for (i = 0; i < count; i++)
++	{
++		rdpMonitor* monitor = &settings->MonitorDefArray[i];
++		monitor->x = i * width;
++		monitor->y = 0;
++		monitor->width = width;
++		monitor->height = height;
++		monitor->is_primary = (i == 0);
++		monitor->orig_screen = i;
++		monitor->attributes.desktopScaleFactor = 100;
++		monitor->attributes.deviceScaleFactor = 100;
++	}
++	return JNI_TRUE;
++}
++
+ static jboolean JNICALL jni_freerdp_connect(JNIEnv* env, jclass cls, jlong instance)
+ {
+ 	freerdp* inst = (freerdp*)instance;
+@@ -888,9 +921,9 @@
+ 	return JNI_TRUE;
+ }
+ 
+-static jboolean JNICALL jni_freerdp_update_graphics(JNIEnv* env, jclass cls, jlong instance,
+-                                                    jobject bitmap, jint x, jint y, jint width,
+-                                                    jint height)
++static jboolean JNICALL jni_freerdp_update_graphics_region(
++    JNIEnv* env, jclass cls, jlong instance, jobject bitmap, jint sourceX, jint sourceY,
++    jint destinationX, jint destinationY, jint width, jint height)
+ {
+ 	UINT32 DstFormat;
+ 	jboolean rc;
+@@ -943,8 +976,9 @@
+ 
+ 	if (rc)
+ 	{
+-		rc = freerdp_image_copy(pixels, DstFormat, info.stride, x, y, width, height,
+-		                        gdi->primary_buffer, gdi->dstFormat, gdi->stride, x, y,
++		rc = freerdp_image_copy(pixels, DstFormat, info.stride, destinationX, destinationY,
++		                        width, height, gdi->primary_buffer, gdi->dstFormat, gdi->stride,
++		                        sourceX, sourceY,
+ 		                        &gdi->palette, FREERDP_FLIP_NONE);
+ 	}
+ 
+@@ -957,6 +991,14 @@
+ 	return rc;
+ }
+ 
++static jboolean JNICALL jni_freerdp_update_graphics(JNIEnv* env, jclass cls, jlong instance,
++                                                    jobject bitmap, jint x, jint y, jint width,
++                                                    jint height)
++{
++	return jni_freerdp_update_graphics_region(env, cls, instance, bitmap, x, y, x, y, width,
++	                                          height);
++}
++
+ static jboolean JNICALL jni_freerdp_send_key_event(JNIEnv* env, jclass cls, jlong instance,
+                                                    jint keycode, jboolean down, jboolean repeat)
+ {
+@@ -1126,6 +1168,9 @@
+ 	{ "freerdp_disconnect", "(J)Z", &jni_freerdp_disconnect },
+ 	{ "freerdp_update_graphics", "(JLandroid/graphics/Bitmap;IIII)Z",
+ 	  &jni_freerdp_update_graphics },
++	{ "freerdp_update_graphics_region", "(JLandroid/graphics/Bitmap;IIIIII)Z",
++	  &jni_freerdp_update_graphics_region },
++	{ "freerdp_set_monitor_layout", "(JIII)Z", &jni_freerdp_set_monitor_layout },
+ 	{ "freerdp_send_cursor_event", "(JIII)Z", &jni_freerdp_send_cursor_event },
+ 	{ "freerdp_send_resize_event", "(JII)Z", &jni_freerdp_send_resize_event },
+ 	{ "freerdp_send_key_event", "(JIZZ)Z", &jni_freerdp_send_key_event },

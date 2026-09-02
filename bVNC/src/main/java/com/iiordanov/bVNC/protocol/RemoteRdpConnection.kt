@@ -1,14 +1,18 @@
 package com.iiordanov.bVNC.protocol
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
 import com.iiordanov.bVNC.App
 import com.iiordanov.bVNC.COLORMODEL
+import com.iiordanov.bVNC.RemoteCanvasActivity
 import com.iiordanov.bVNC.Utils
 import com.iiordanov.bVNC.input.RemoteRdpKeyboard
 import com.iiordanov.bVNC.input.RemoteRdpPointer
 import com.undatech.opaque.Connection
 import com.undatech.opaque.RdpCommunicator
+import com.undatech.opaque.RdpMonitorConnection
+import com.undatech.opaque.RdpMonitorLayout
 import com.undatech.opaque.Viewable
 import com.undatech.remoteClientUi.R
 
@@ -20,18 +24,32 @@ class RemoteRdpConnection(
 ) : RemoteConnection(context, connection, canvas, hideKeyboardAndExtraKeys) {
     private val tag: String = "RemoteRdpConnection"
     private var rdpComm: RdpCommunicator? = null
+    private val activity = context as? Activity
+    private val monitorCount = activity?.intent?.getIntExtra(RemoteCanvasActivity.EXTRA_RDP_MONITOR_COUNT, 1) ?: 1
+    private val monitorIndex = activity?.intent?.getIntExtra(RemoteCanvasActivity.EXTRA_RDP_MONITOR_INDEX, 0) ?: 0
+    private val monitorGroupId = activity?.intent?.getStringExtra(RemoteCanvasActivity.EXTRA_RDP_MONITOR_GROUP)
+    private var startsSharedSession = true
 
     /**
      * Initializes an RDP connection.
      */
     private fun initializeRdpConnection() {
         Log.i(tag, "initializeRdpConnection: Initializing RDP connection.")
-        rdpComm = RdpCommunicator(
-            connection, context, handler, canvas,
-            connection.connectionConfigFile, connection.userName, connection.rdpDomain, connection.password,
-            App.debugLog, isRemoteToLocalClipboardIntegrationEnabled
-        )
-        rfbConn = rdpComm
+        rdpComm = if (monitorCount > 1 && monitorGroupId != null) {
+            RdpCommunicator.acquireMultiMonitorSession(
+                monitorGroupId, monitorIndex, monitorCount, connection, context, handler, canvas,
+                connection.connectionConfigFile, connection.userName, connection.rdpDomain,
+                connection.password, App.debugLog, isRemoteToLocalClipboardIntegrationEnabled
+            )
+        } else {
+            RdpCommunicator(
+                connection, context, handler, canvas,
+                connection.connectionConfigFile, connection.userName, connection.rdpDomain, connection.password,
+                App.debugLog, isRemoteToLocalClipboardIntegrationEnabled
+            )
+        }
+        startsSharedSession = monitorCount == 1 || rdpComm!!.beginConnection()
+        rfbConn = if (monitorCount > 1) RdpMonitorConnection(rdpComm, monitorIndex, canvas) else rdpComm
         pointer = RemoteRdpPointer(rfbConn, context, this, canvas, handler, !connection.useDpadAsArrows, App.debugLog)
         keyboard = RemoteRdpKeyboard(
             rdpComm, canvas, this, handler, App.debugLog,
@@ -52,8 +70,8 @@ class RemoteRdpConnection(
         val rdpPort = getRemoteProtocolPort(connection.port)
         val gatewayPort = getGatewayPort(connection.rdpGatewayPort)
         canvas.waitUntilInflated()
-        val remoteWidth = canvas.getRemoteWidth(canvas.width, canvas.height)
-        val remoteHeight = canvas.getRemoteHeight(canvas.width, canvas.height)
+        val remoteWidth = minOf(canvas.getRemoteWidth(canvas.width, canvas.height), RdpMonitorLayout.maxMonitorWidth(monitorCount))
+        val remoteHeight = minOf(canvas.getRemoteHeight(canvas.width, canvas.height), RdpMonitorLayout.MAX_DESKTOP_DIMENSION)
         rdpComm!!.setConnectionParameters(
             address, rdpPort,
             connection.rdpGatewayEnabled, gatewayAddress, gatewayPort,
@@ -74,14 +92,14 @@ class RemoteRdpConnection(
         super.initializeConnection()
         try {
             initializeRdpConnection()
-            initializeClipboardMonitor()
+            if (startsSharedSession) initializeClipboardMonitor()
         } catch (e: Throwable) {
             handleUncaughtException(e, R.string.error_rdp_unable_to_connect)
         }
         connectionThread = object : Thread() {
             override fun run() {
                 try {
-                    startRdpConnection()
+                    if (startsSharedSession) startRdpConnection()
                 } catch (e: Throwable) {
                     handleUncaughtException(e, R.string.error_rdp_unable_to_connect)
                 }
@@ -161,6 +179,15 @@ class RemoteRdpConnection(
 
     override fun isColorModel(cm: COLORMODEL) = false
     override fun setColorModel(cm: COLORMODEL?) {}
+
+    override fun shouldSaveScreenshot() = monitorIndex == 0
+
+    override fun disconnectSession() {
+        if (monitorCount > 1) rdpComm?.disconnectAllMonitors() else super.disconnectSession()
+    }
+
+    override fun getMissingMonitorIndices(): List<Int> =
+        if (monitorCount > 1) rdpComm?.missingMonitorIndices ?: emptyList() else emptyList()
 
     @Throws(java.lang.Exception::class)
     override fun correctAfterRotation() {
