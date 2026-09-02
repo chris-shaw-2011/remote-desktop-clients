@@ -33,7 +33,7 @@ public abstract class AbstractConnectionBean extends com.antlersoft.android.dbim
     public static final String TAG = "AbstractConnectionBean";
 
     public static final String GEN_TABLE_NAME = "CONNECTION_BEAN";
-    public static final int GEN_COUNT = 107;
+    public static final int GEN_COUNT = 108;
 
     // Field constants
     public static final String GEN_FIELD__ID = "_id";
@@ -258,6 +258,8 @@ public abstract class AbstractConnectionBean extends com.antlersoft.android.dbim
     public static final int GEN_ID_SVNCENABLED = 105;
     public static final String GEN_FIELD_KEEPSVNCPASSPHRASE = "KEEPSVNCPASSPHRASE";
     public static final int GEN_ID_KEEPSVNCPASSPHRASE = 106;
+    public static final String GEN_FIELD_RDPMONITORCOUNT = "RDPMONITORCOUNT";
+    public static final int GEN_ID_RDPMONITORCOUNT = 107;
 
     // SQL Command for creating the table
     public static String GEN_CREATE = "CREATE TABLE CONNECTION_BEAN (" +
@@ -367,7 +369,8 @@ public abstract class AbstractConnectionBean extends com.antlersoft.android.dbim
             "CLIENTAUTHENABLED BOOLEAN," +
             "SVNCPASSPHRASE TEXT," +
             "SVNCENABLED BOOLEAN," +
-            "KEEPSVNCPASSPHRASE BOOLEAN" +
+            "KEEPSVNCPASSPHRASE BOOLEAN," +
+            "RDPMONITORCOUNT INTEGER DEFAULT 1" +
             ")";
 
     // Members corresponding to defined fields
@@ -431,6 +434,7 @@ public abstract class AbstractConnectionBean extends com.antlersoft.android.dbim
     private String gen_DOUBLE_TAP_ACTION;
     private int gen_rdpResType;
     private int gen_rdpWidth;
+    private int gen_rdpMonitorCount = 1;
     private int gen_rdpHeight;
     private int gen_rdpColor;
     private boolean gen_remoteFx;
@@ -986,6 +990,14 @@ public abstract class AbstractConnectionBean extends com.antlersoft.android.dbim
         gen_rdpWidth = arg_rdpWidth;
     }
 
+    public int getRdpMonitorCount() {
+        return Math.max(1, gen_rdpMonitorCount);
+    }
+
+    public void setRdpMonitorCount(int arg_rdpMonitorCount) {
+        gen_rdpMonitorCount = arg_rdpMonitorCount;
+    }
+
     public int getRdpHeight() {
         return gen_rdpHeight;
     }
@@ -1492,6 +1504,7 @@ public abstract class AbstractConnectionBean extends com.antlersoft.android.dbim
         values.put(GEN_FIELD_SVNCPASSPHRASE, this.gen_svncPassphrase);
         values.put(GEN_FIELD_SVNCENABLED, (this.gen_svncEnabled));
         values.put(GEN_FIELD_KEEPSVNCPASSPHRASE, (this.gen_keepSvncPassphrase));
+        values.put(GEN_FIELD_RDPMONITORCOUNT, this.gen_rdpMonitorCount);
 
         return values;
     }
@@ -1620,6 +1633,7 @@ public abstract class AbstractConnectionBean extends com.antlersoft.android.dbim
         result[104] = cursor.getColumnIndex(GEN_FIELD_SVNCPASSPHRASE);
         result[105] = cursor.getColumnIndex(GEN_FIELD_SVNCENABLED);
         result[106] = cursor.getColumnIndex(GEN_FIELD_KEEPSVNCPASSPHRASE);
+        result[107] = cursor.getColumnIndex(GEN_FIELD_RDPMONITORCOUNT);
 
         return result;
     }
@@ -1953,6 +1967,9 @@ public abstract class AbstractConnectionBean extends com.antlersoft.android.dbim
         if (columnIndices[GEN_ID_KEEPSVNCPASSPHRASE] >= 0 && !cursor.isNull(columnIndices[GEN_ID_KEEPSVNCPASSPHRASE])) {
             gen_keepSvncPassphrase = cursor.getInt(columnIndices[GEN_ID_KEEPSVNCPASSPHRASE]) != 0;
         }
+        if (columnIndices[GEN_ID_RDPMONITORCOUNT] >= 0 && !cursor.isNull(columnIndices[GEN_ID_RDPMONITORCOUNT])) {
+            gen_rdpMonitorCount = cursor.getInt(columnIndices[GEN_ID_RDPMONITORCOUNT]);
+        }
     }
 
     /**
@@ -2073,6 +2090,7 @@ public abstract class AbstractConnectionBean extends com.antlersoft.android.dbim
         gen_svncEnabled = svncEnabled != null && svncEnabled;
         Boolean keepSvncPassphrase = values.getAsBoolean(GEN_FIELD_KEEPSVNCPASSPHRASE);
         gen_keepSvncPassphrase = keepSvncPassphrase == null || keepSvncPassphrase;
+        gen_rdpMonitorCount = intOr(values, GEN_FIELD_RDPMONITORCOUNT, 1);
     }
 
     private static boolean boolOr(android.content.ContentValues values, String key, boolean defaultValue) {

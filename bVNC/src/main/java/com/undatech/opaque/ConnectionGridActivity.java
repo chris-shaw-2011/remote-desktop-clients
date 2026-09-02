@@ -138,30 +138,7 @@ public class ConnectionGridActivity extends NormalizedScrollActivity implements 
         gridView = findViewById(R.id.gridView);
         gridView.setEmptyView(findViewById(R.id.emptyState));
         gridView.setOnItemClickListener((parent, v, position, id) -> launchConnection(v));
-        gridView.setOnItemLongClickListener((parent, v, position, id) -> {
-            AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(ConnectionGridActivity.this);
-            String gridItemText = ((TextView) v.findViewById(R.id.grid_item_text)).getText().toString();
-            alertDialogBuilder.setTitle(getString(R.string.connection_edit_delete_prompt) + " " + gridItemText + " ?");
-            List<CharSequence> options = new ArrayList<>();
-            options.add(getString(R.string.connection_edit));
-            options.add(getString(R.string.connection_delete));
-            if (shortcutCreationSupported()) {
-                options.add(getString(R.string.connection_add_shortcut));
-            }
-            CharSequence[] cs = options.toArray(new CharSequence[0]);
-            alertDialogBuilder.setItems(cs, (dialog, item) -> {
-                String choice = cs[item].toString();
-                if (getString(R.string.connection_edit).equals(choice)) {
-                    editConnection(v);
-                } else if (getString(R.string.connection_delete).equals(choice)) {
-                    deleteConnection(v);
-                } else if (getString(R.string.connection_add_shortcut).equals(choice)) {
-                    createShortcut(v);
-                }
-            });
-            alertDialogBuilder.create().show();
-            return true;
-        });
+        gridView.setOnItemLongClickListener((parent, v, position, id) -> showConnectionActions(v));
         new BatteryOptimizationDisabler(this, gridView).requestBatteryOptimizationExemptionAutomaticallyOnce();
 
         search = findViewById(R.id.search);
@@ -218,7 +195,8 @@ public class ConnectionGridActivity extends NormalizedScrollActivity implements 
                 ConnectionGridActivity.this,
                 sortConnections(getConnectionLoader(this).loadConnectionsById()),
                 search.getText().toString().toLowerCase().split(" "),
-                2);
+                2,
+                this::showConnectionActions);
         gridView.setAdapter(labeledImageApapter);
         gridView.setNumColumns(labeledImageApapter.getNumCols());
     }
@@ -341,6 +319,31 @@ public class ConnectionGridActivity extends NormalizedScrollActivity implements 
      */
     private boolean shortcutCreationSupported() {
         return !Utils.isOpaque(this) && !ShortcutHelper.isMasterPasswordEnabled(this);
+    }
+
+    private boolean showConnectionActions(View v) {
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(this);
+        String gridItemText = ((TextView) v.findViewById(R.id.grid_item_text)).getText().toString();
+        alertDialogBuilder.setTitle(getString(R.string.connection_edit_delete_prompt) + " " + gridItemText + " ?");
+        List<CharSequence> options = new ArrayList<>();
+        options.add(getString(R.string.connection_edit));
+        options.add(getString(R.string.connection_delete));
+        if (shortcutCreationSupported()) {
+            options.add(getString(R.string.connection_add_shortcut));
+        }
+        CharSequence[] choices = options.toArray(new CharSequence[0]);
+        alertDialogBuilder.setItems(choices, (dialog, item) -> {
+            String choice = choices[item].toString();
+            if (getString(R.string.connection_edit).equals(choice)) {
+                editConnection(v);
+            } else if (getString(R.string.connection_delete).equals(choice)) {
+                deleteConnection(v);
+            } else if (getString(R.string.connection_add_shortcut).equals(choice)) {
+                createShortcut(v);
+            }
+        });
+        alertDialogBuilder.create().show();
+        return true;
     }
 
     private void createShortcut(View v) {

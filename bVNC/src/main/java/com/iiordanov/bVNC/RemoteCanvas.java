@@ -144,7 +144,7 @@ public class RemoteCanvas extends AppCompatImageView implements Viewable {
     private final Runnable resolutionResizeRequester = () -> {
         if (drawableReallocatedListener == null || connection == null ||
                 !drawableReallocatedListener.isInNormalProtocol() ||
-                !connection.isRequestingNewDisplayResolution()) {
+                !connection.isRequestingNewDisplayResolution() || connection.getRdpMonitorCount() > 1) {
             return;
         }
         try {
