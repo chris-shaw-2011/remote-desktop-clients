@@ -90,6 +90,11 @@
         android:title="@string/disconnect"
         />
     <item
+        android:id="@+id/itemRestoreRdpMonitors"
+        android:icon="@android:drawable/ic_menu_revert"
+        android:title="@string/restore_rdp_monitors"
+        android:visible="false" />
+    <item
         android:id="@+id/itemSpecialKeys"
         android:alphabeticShortcut="k"
         android:icon="@android:drawable/ic_dialog_dialer"

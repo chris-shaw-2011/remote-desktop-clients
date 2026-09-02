@@ -26,6 +26,7 @@ import com.iiordanov.bVNC.protocol.RemoteConnection;
 import com.undatech.opaque.Connection;
 import com.undatech.opaque.MessageDialogs;
 import com.undatech.opaque.RemoteClientLibConstants;
+import com.undatech.opaque.RfbConnectable;
 import com.undatech.opaque.dialogs.ChoiceFragment;
 import com.undatech.opaque.dialogs.MessageFragment;
 import com.undatech.opaque.dialogs.SelectTextElementFragment;
@@ -535,6 +536,7 @@ public class RemoteCanvasHandler extends Handler implements HttpsFileDownloader.
                 Log.i(TAG, "REINIT_SESSION");
                 remoteConnection.initializeConnection();
                 c.setParameters(remoteConnection.getRfbConn(), connection, this, remoteConnection.getPointer(), setModes);
+                remoteConnection.onCanvasReady();
                 break;
             case RemoteClientLibConstants.VV_DOWNLOAD_TIMEOUT:
                 MessageDialogs.displayMessageAndFinish(context, R.string.error_vv_download_timeout,
@@ -659,9 +661,14 @@ public class RemoteCanvasHandler extends Handler implements HttpsFileDownloader.
             case RemoteClientLibConstants.GRAPHICS_SETTINGS_RECEIVED:
                 Log.i(TAG, "GRAPHICS_SETTINGS_RECEIVED");
                 dismissProgressDialog();
-                synchronized (remoteConnection.getRfbConn()) {
-                    remoteConnection.graphicsSettingsReceived = true;
-                    remoteConnection.getRfbConn().notifyAll();
+                remoteConnection.graphicsSettingsReceived = true;
+                RfbConnectable rfbConnection = remoteConnection.getRfbConn();
+                if (rfbConnection != null) {
+                    synchronized (rfbConnection) {
+                        rfbConnection.notifyAll();
+                    }
+                } else {
+                    Log.w(TAG, "Ignoring graphics settings received before the connection was initialized");
                 }
                 break;
             case RemoteClientLibConstants.GRAPHICS_FIRST_FRAME_RECEIVED:
