@@ -1003,6 +1003,14 @@ Below that is where you configure your connection.
     <string name="mouse_wheel_scroll_multiplier">Mouse Wheel Scroll Speed (%)</string>
     <string name="touchpad_sensitivity">Touchpad Sensitivity</string>
     <string name="desktop_scale_percentage">Custom Scaling Percentage</string>
+    <string name="rdp_monitor_count">Number of monitors</string>
+    <string name="restore_rdp_monitors">Restore monitor windows</string>
+    <string-array name="rdp_monitor_counts" translatable="false">
+        <item>1</item><item>2</item><item>3</item><item>4</item>
+        <item>5</item><item>6</item><item>7</item><item>8</item>
+        <item>9</item><item>10</item><item>11</item><item>12</item>
+        <item>13</item><item>14</item><item>15</item><item>16</item>
+    </string-array>
     <string name="show_menu">Show Menu</string>
     <string name="move_toolbar">Move Toolbar</string>
     <string name="disable_battery_optimizations">🔋Disable Battery Optimizations</string>

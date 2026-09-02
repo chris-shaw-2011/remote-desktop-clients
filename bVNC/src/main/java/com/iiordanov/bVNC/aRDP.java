@@ -51,6 +51,7 @@ import java.util.List;
  */
 public class aRDP extends MainConfiguration {
     private Spinner spinnerRdpGeometry;
+    private Spinner spinnerRdpMonitorCount;
     private EditText rdpDomain;
     private ToggleButton rdpGatewayEnabled;
     private LinearLayout layoutRdpGatewaySettings;
@@ -153,6 +154,7 @@ public class aRDP extends MainConfiguration {
     private void initializeRdpResolutionSpinner() {
         // The geometry type and dimensions boxes.
         spinnerRdpGeometry = findViewById(R.id.spinnerRdpGeometry);
+        spinnerRdpMonitorCount = findViewById(R.id.spinnerRdpMonitorCount);
         spinnerRdpGeometry.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> arg0, View view, int itemIndex, long id) {
@@ -238,6 +240,7 @@ public class aRDP extends MainConfiguration {
 
     private void setRdpGeometrySpinnerPositionFromSelected() {
         spinnerRdpGeometry.setSelection(selected.getRdpResType());
+        spinnerRdpMonitorCount.setSelection(Math.max(1, Math.min(16, selected.getRdpMonitorCount())) - 1);
     }
 
     private void setRdpColorSpinnerPositionFromSelected() {
@@ -294,6 +297,7 @@ public class aRDP extends MainConfiguration {
 
     private void updateSelectedRdpResolutionTypeFromRdpGeometrySpinnerPosition() {
         selected.setRdpResType(spinnerRdpGeometry.getSelectedItemPosition());
+        selected.setRdpMonitorCount(spinnerRdpMonitorCount.getSelectedItemPosition() + 1);
     }
 
     private void updateSelectedAdvancedSettingsFromViews() {
