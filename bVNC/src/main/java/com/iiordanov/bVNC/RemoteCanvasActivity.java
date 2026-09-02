@@ -99,6 +99,7 @@ import com.iiordanov.util.SamsungDexUtils;
 import com.undatech.opaque.Connection;
 import com.undatech.opaque.NormalizedScrollActivity;
 import com.undatech.opaque.RemoteClientLibConstants;
+import com.undatech.opaque.RdpMonitorLayout;
 import com.undatech.opaque.dialogs.SelectTextElementFragment;
 import com.undatech.opaque.util.GeneralUtils;
 import com.undatech.opaque.util.OnTouchViewMover;
@@ -111,11 +112,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
 
 @SuppressLint("ClickableViewAccessibility")
 public class RemoteCanvasActivity extends NormalizedScrollActivity implements
         SelectTextElementFragment.OnFragmentDismissedListener, TouchInputDelegate,
         SystemKeyCaptureService.KeyEventListener {
+
+    public static final String EXTRA_RDP_MONITOR_GROUP = "rdpMonitorGroup";
+    public static final String EXTRA_RDP_MONITOR_INDEX = "rdpMonitorIndex";
+    public static final String EXTRA_RDP_MONITOR_COUNT = "rdpMonitorCount";
 
     public static final int[] inputModeIds = {R.id.itemInputTouchpad,
             R.id.itemInputTouchPanZoomMouse,
@@ -356,6 +362,8 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
             Utils.showFatalErrorMessage(this, getResources().getString(e.getErrorStringId()));
             return;
         }
+        launchAdditionalRdpMonitorPanels();
+        labelRdpMonitorPanel();
         remoteConnection = new RemoteConnectionFactory(this, connection, canvas, hideKeyboardAndExtraKeys).build();
 
         if (connection != null && connection.isReadyForConnection()) {
@@ -368,6 +376,35 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
         }
 
         Log.d(TAG, "OnCreate complete");
+    }
+
+    private void launchAdditionalRdpMonitorPanels() {
+        if (!Utils.isRdp(this) || connection == null || getIntent().hasExtra(EXTRA_RDP_MONITOR_GROUP)) {
+            return;
+        }
+        int count = RdpMonitorLayout.clampCount(connection.getRdpMonitorCount());
+        if (count == 1) {
+            return;
+        }
+        String groupId = UUID.randomUUID().toString();
+        getIntent().putExtra(EXTRA_RDP_MONITOR_GROUP, groupId)
+                .putExtra(EXTRA_RDP_MONITOR_INDEX, 0)
+                .putExtra(EXTRA_RDP_MONITOR_COUNT, count);
+        for (int index = 1; index < count; index++) {
+            Intent monitorIntent = new Intent(getIntent());
+            monitorIntent.setClass(this, RemoteCanvasActivity.class);
+            monitorIntent.putExtra(EXTRA_RDP_MONITOR_INDEX, index);
+            monitorIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+            startActivity(monitorIntent);
+        }
+    }
+
+    private void labelRdpMonitorPanel() {
+        int count = getIntent().getIntExtra(EXTRA_RDP_MONITOR_COUNT, 1);
+        if (count > 1) {
+            int index = getIntent().getIntExtra(EXTRA_RDP_MONITOR_INDEX, 0);
+            setTitle(connection.getNickname() + " — Monitor " + (index + 1));
+        }
     }
 
     private void setApplicationSpecificSettings() {
@@ -988,6 +1025,7 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
         // Make sure extra keys stow item is gone if extra keys are disabled and vice versa.
         setKeyStowDrawableAndVisibility(menu.findItem(R.id.extraKeysToggle));
         menu.findItem(R.id.itemColorMode).setVisible(remoteConnection.canUpdateColorModelConnected());
+        menu.findItem(R.id.itemRestoreRdpMonitors).setVisible(!remoteConnection.getMissingMonitorIndices().isEmpty());
         return true;
     }
 
@@ -1183,6 +1221,9 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
         } else if (itemId == R.id.itemDisconnect) {
             disconnectAndFinishActivity();
             return true;
+        } else if (itemId == R.id.itemRestoreRdpMonitors) {
+            restoreRdpMonitorPanels();
+            return true;
         } else if (itemId == R.id.itemEnterText) {
             openSendTextPanel();
             return true;
@@ -1220,8 +1261,18 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
     }
 
     private void disconnectAndFinishActivity() {
-        remoteConnection.closeConnection();
+        remoteConnection.disconnectSession();
         Utils.justFinish(this);
+    }
+
+    private void restoreRdpMonitorPanels() {
+        for (int index : remoteConnection.getMissingMonitorIndices()) {
+            Intent monitorIntent = new Intent(getIntent());
+            monitorIntent.setClass(this, RemoteCanvasActivity.class);
+            monitorIntent.putExtra(EXTRA_RDP_MONITOR_INDEX, index);
+            monitorIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+            startActivity(monitorIntent);
+        }
     }
 
     public boolean setInputMode(int id) {

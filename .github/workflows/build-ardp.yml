@@ -153,6 +153,7 @@ jobs:
           freerdp_root="remoteClientLib/jni/libs/deps/FreeRDP"
           bookmark="$freerdp_root/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/domain/BookmarkBase.java"
           libfreerdp_client="$freerdp_root/client/Android/Studio/freeRDPCore/src/main/jniLibs/arm64-v8a/libfreerdp-client2.so"
+          libfreerdp_android="$freerdp_root/client/Android/Studio/freeRDPCore/src/main/jniLibs/arm64-v8a/libfreerdp-android.so"
           if [[ ! -f "$bookmark" || ! -d "$freerdp_root/client/Android/Studio/freeRDPCore/src/main/jniLibs/arm64-v8a" ]]; then
             echo "::error::The patched FreeRDP dependency was not built correctly"
             exit 1
@@ -161,6 +162,9 @@ jobs:
           grep -Fq 'void setGlyphCache(boolean glyphCache)' "$bookmark"
           grep -Fq 'args.add("/sound:latency:150")' \
             "$freerdp_root/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java"
+          grep -Fq 'freerdp_set_monitor_layout' \
+            "$freerdp_root/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java"
+          grep -Faq 'freerdp_update_graphics_region' "$libfreerdp_android"
           grep -Faq 'Starting buffered OpenSL playback with %d ms prebuffer' "$libfreerdp_client"
 
       - name: Build aRDP release APKs

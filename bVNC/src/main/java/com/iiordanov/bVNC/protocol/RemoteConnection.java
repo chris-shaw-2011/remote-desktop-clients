@@ -58,6 +58,8 @@ import com.undatech.opaque.util.GeneralUtils;
 import com.undatech.remoteClientUi.R;
 
 import java.util.HashMap;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 
@@ -311,11 +313,23 @@ abstract public class RemoteConnection implements PointerInputHandler, KeyInputH
             sshConnection = null;
         }
 
-        if (connection != null && !Utils.isDoNotShowDesktopThumbnails(context)) {
+        if (connection != null && shouldSaveScreenshot() && !Utils.isDoNotShowDesktopThumbnails(context)) {
             Log.d(TAG, "Saving screenshot to " + context.getFilesDir() + "/" + connection.getScreenshotFilename());
             canvas.writeScreenshotToFile(context.getFilesDir() + "/" + connection.getScreenshotFilename(), 720);
         }
         onDestroy();
+    }
+
+    public void disconnectSession() {
+        closeConnection();
+    }
+
+    public List<Integer> getMissingMonitorIndices() {
+        return Collections.emptyList();
+    }
+
+    protected boolean shouldSaveScreenshot() {
+        return true;
     }
 
     /**

@@ -21,8 +21,10 @@ import org.apache.commons.validator.routines.InetAddressValidator;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,6 +34,7 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         LibFreeRDP.UIEventListener, LibFreeRDP.EventListener {
     static final String TAG = "RdpCommunicator";
     private static final RdpSessionRegistry SESSION_REGISTRY = new RdpSessionRegistry();
+    private static final Map<String, RdpCommunicator> MULTI_MONITOR_SESSIONS = new HashMap<>();
 
     // private final static int VK_CONTROL = 0x11;
     private final static int VK_LCONTROL = 0xA2;
@@ -44,7 +47,12 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     private final static int VK_RWIN = 0x5C;
     private final static int VK_EXT_KEY = 0x00000100;
     private final RdpCommunicator myself;
-    private final Viewable viewable;
+    private final Map<Integer, MonitorTarget> monitorTargets = new HashMap<>();
+    private final String monitorGroupId;
+    private final int monitorCount;
+    private boolean connectionStarted;
+    private int framebufferWidth;
+    private int framebufferHeight;
     private volatile SessionState session;
     private final BookmarkBase bookmark;
     private final Context context;
@@ -77,13 +85,25 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
                            String rdpFileName, String username, String domain, String password,
                            boolean debugLogging, boolean isRemoteToLocalClipboardIntegrationEnabled
     ) {
+        this(connection, context, handler, viewable, rdpFileName, username, domain, password,
+                debugLogging, isRemoteToLocalClipboardIntegrationEnabled, null, 0, 1);
+    }
+
+    private RdpCommunicator(Connection connection,
+                           Context context, Handler handler, Viewable viewable,
+                           String rdpFileName, String username, String domain, String password,
+                           boolean debugLogging, boolean isRemoteToLocalClipboardIntegrationEnabled,
+                           String monitorGroupId, int monitorIndex, int monitorCount
+    ) {
         super(debugLogging, handler, isRemoteToLocalClipboardIntegrationEnabled);
         this.connection = connection;
         SESSION_REGISTRY.install();
         // Create a manual bookmark and populate it from settings.
         this.bookmark = new ManualBookmark();
-        this.context = context;
-        this.viewable = viewable;
+        this.context = context.getApplicationContext();
+        this.monitorGroupId = monitorGroupId;
+        this.monitorCount = monitorCount;
+        attachMonitor(monitorIndex, handler, viewable);
         this.myself = this;
         this.username = username;
         this.domain = domain;
@@ -99,6 +119,114 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         initSession(rdpFileName, username, domain, password);
     }
 
+    public static synchronized RdpCommunicator acquireMultiMonitorSession(
+            String groupId, int monitorIndex, int monitorCount, Connection connection,
+            Context context, Handler handler, Viewable viewable, String rdpFileName,
+            String username, String domain, String password, boolean debugLogging,
+            boolean isRemoteToLocalClipboardIntegrationEnabled) {
+        RdpCommunicator communicator = MULTI_MONITOR_SESSIONS.get(groupId);
+        if (communicator == null) {
+            communicator = new RdpCommunicator(connection, context, handler, viewable, rdpFileName,
+                    username, domain, password, debugLogging,
+                    isRemoteToLocalClipboardIntegrationEnabled, groupId, monitorIndex, monitorCount);
+            MULTI_MONITOR_SESSIONS.put(groupId, communicator);
+        } else {
+            communicator.attachMonitor(monitorIndex, handler, viewable);
+        }
+        return communicator;
+    }
+
+    public synchronized boolean beginConnection() {
+        if (connectionStarted) {
+            return false;
+        }
+        connectionStarted = true;
+        return true;
+    }
+
+    public synchronized void attachMonitor(int index, Handler targetHandler, Viewable targetViewable) {
+        monitorTargets.put(index, new MonitorTarget(targetHandler, targetViewable));
+        if (framebufferWidth > 0 && framebufferHeight > 0) {
+            targetViewable.reallocateDrawable(getMonitorWidth(), framebufferHeight);
+            Bitmap bitmap = targetViewable.getBitmap();
+            if (isInNormalProtocol && session != null && bitmap != null) {
+                LibFreeRDP.updateGraphicsRegion(session.getInstance(), bitmap,
+                        RdpMonitorLayout.monitorOriginX(index, getMonitorWidth()), 0,
+                        0, 0, getMonitorWidth(), framebufferHeight);
+                targetViewable.reDraw(0, 0, getMonitorWidth(), framebufferHeight);
+                monitorTargets.get(index).receivedFirstFrame = true;
+                targetHandler.sendEmptyMessage(RemoteClientLibConstants.GRAPHICS_FIRST_FRAME_RECEIVED);
+            }
+        }
+    }
+
+    public void detachMonitor(int index, Viewable viewable) {
+        boolean close;
+        synchronized (this) {
+            MonitorTarget target = monitorTargets.get(index);
+            if (target != null && target.viewable == viewable) {
+                monitorTargets.remove(index);
+            }
+            close = monitorTargets.isEmpty();
+        }
+        if (close) {
+            synchronized (RdpCommunicator.class) {
+                MULTI_MONITOR_SESSIONS.remove(monitorGroupId, this);
+            }
+            close();
+        }
+    }
+
+    public int getMonitorWidth() {
+        return Math.max(1, framebufferWidth() / monitorCount);
+    }
+
+    private synchronized List<MonitorTarget> getMonitorTargets() {
+        return new ArrayList<>(monitorTargets.values());
+    }
+
+    private synchronized Handler getActiveHandler() {
+        for (MonitorTarget target : monitorTargets.values()) {
+            if (target.viewable.isForegrounded()) {
+                return target.handler;
+            }
+        }
+        return monitorTargets.isEmpty() ? handler : monitorTargets.values().iterator().next().handler;
+    }
+
+    private void sendEmptyMessageToAll(int what) {
+        for (MonitorTarget target : getMonitorTargets()) {
+            target.handler.sendEmptyMessage(what);
+        }
+    }
+
+    public synchronized List<Integer> getMissingMonitorIndices() {
+        List<Integer> missing = new ArrayList<>();
+        for (int index = 0; index < monitorCount; index++) {
+            if (!monitorTargets.containsKey(index)) {
+                missing.add(index);
+            }
+        }
+        return missing;
+    }
+
+    public void disconnectAllMonitors() {
+        for (MonitorTarget target : getMonitorTargets()) {
+            target.handler.sendEmptyMessage(RemoteClientLibConstants.DISCONNECT_NO_MESSAGE);
+        }
+    }
+
+    private static class MonitorTarget {
+        final Handler handler;
+        final Viewable viewable;
+        boolean receivedFirstFrame;
+
+        MonitorTarget(Handler handler, Viewable viewable) {
+            this.handler = handler;
+            this.viewable = viewable;
+        }
+    }
+
     @Override
     public void setIsInNormalProtocol(boolean state) {
         Log.d(TAG, "setIsInNormalProtocol: " + state);
@@ -107,12 +235,14 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
     @Override
     public int framebufferWidth() {
-        return session.getBookmark().getActiveScreenSettings().getWidth();
+        return framebufferWidth > 0 ? framebufferWidth
+                : session.getBookmark().getActiveScreenSettings().getWidth() * monitorCount;
     }
 
     @Override
     public int framebufferHeight() {
-        return session.getBookmark().getActiveScreenSettings().getHeight();
+        return framebufferHeight > 0 ? framebufferHeight
+                : session.getBookmark().getActiveScreenSettings().getHeight();
     }
 
     @Override
@@ -386,7 +516,7 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
     @Override
     public void requestResolution(int x, int y) {
-        if (isInNormalProtocol && connection.isRequestingNewDisplayResolution()) {
+        if (monitorCount == 1 && isInNormalProtocol && connection.isRequestingNewDisplayResolution()) {
             LibFreeRDP.sendResizeEvent(session.getInstance(), x, y);
         }
     }
@@ -456,7 +586,10 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
                 ? BookmarkBase.ScreenSettings.AUTOMATIC
                 : BookmarkBase.ScreenSettings.CUSTOM);
         screenSettings.setDesktopScalePercentage(desktopScalePercentage);
+        screenSettings.setMonitorCount(monitorCount);
         updateScreenSettings(remoteWidth, remoteHeight, colors);
+        framebufferWidth = remoteWidth * monitorCount;
+        framebufferHeight = remoteHeight;
 
         // Set performance flags.
         BookmarkBase.PerformanceFlags performanceFlags = bookmark.getPerformanceFlags();
@@ -547,17 +680,17 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
             connect();
         } else if (authenticationAttempted && !myself.isInNormalProtocol()) {
             Log.v(TAG, "Sending message: GET_RDP_CREDENTIALS");
-            handler.sendEmptyMessage(RemoteClientLibConstants.GET_RDP_CREDENTIALS);
+            getActiveHandler().sendEmptyMessage(RemoteClientLibConstants.GET_RDP_CREDENTIALS);
         } else if (gatewayAuthenticationAttempted && !myself.isInNormalProtocol()) {
             Log.v(TAG, "Sending message: GET_RDP_GATEWAY_CREDENTIALS");
-            handler.sendEmptyMessage(RemoteClientLibConstants.GET_RDP_GATEWAY_CREDENTIALS);
+            getActiveHandler().sendEmptyMessage(RemoteClientLibConstants.GET_RDP_GATEWAY_CREDENTIALS);
         } else if (!disconnectRequested && !myself.isInNormalProtocol()) {
             Log.v(TAG, "Sending message: RDP_UNABLE_TO_CONNECT");
-            handler.sendEmptyMessage(RemoteClientLibConstants.RDP_UNABLE_TO_CONNECT);
+            sendEmptyMessageToAll(RemoteClientLibConstants.RDP_UNABLE_TO_CONNECT);
         } else if (!disconnectRequested) {
             myself.setIsInNormalProtocol(false);
             Log.v(TAG, "Sending message: RDP_CONNECT_FAILURE");
-            handler.sendEmptyMessage(RemoteClientLibConstants.RDP_CONNECT_FAILURE);
+            sendEmptyMessageToAll(RemoteClientLibConstants.RDP_CONNECT_FAILURE);
         }
     }
 
@@ -567,26 +700,37 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
             return;
         }
         Log.v(TAG, "OnDisconnected");
+        if (disconnectRequested) {
+            return;
+        }
         if (!myself.isInNormalProtocol()) {
             Log.v(TAG, "Sending message: RDP_UNABLE_TO_CONNECT");
-            handler.sendEmptyMessage(RemoteClientLibConstants.RDP_UNABLE_TO_CONNECT);
+            sendEmptyMessageToAll(RemoteClientLibConstants.RDP_UNABLE_TO_CONNECT);
         } else {
             Log.v(TAG, "Sending message: RDP_CONNECT_FAILURE");
-            handler.sendEmptyMessage(RemoteClientLibConstants.RDP_CONNECT_FAILURE);
+            sendEmptyMessageToAll(RemoteClientLibConstants.RDP_CONNECT_FAILURE);
         }
     }
 
     @Override
     public void OnSettingsChanged(int width, int height, int bpp) {
         Log.d(TAG, "OnSettingsChanged called, wxh: " + width + "x" + height);
-        handler.sendEmptyMessage(RemoteClientLibConstants.GRAPHICS_SETTINGS_RECEIVED);
+        framebufferWidth = width;
+        framebufferHeight = height;
+        sendEmptyMessageToAll(RemoteClientLibConstants.GRAPHICS_SETTINGS_RECEIVED);
         BookmarkBase.ScreenSettings settings = session.getBookmark().getActiveScreenSettings();
-        if (settings.getWidth() != width || settings.getHeight() != height) {
+        if (monitorCount > 1) {
+            updateScreenSettings(width / monitorCount, height, bpp);
+            reallocateMonitorDrawables(width / monitorCount, height);
+        } else if (settings.getWidth() != width || settings.getHeight() != height) {
             Log.i(TAG, "OnSettingsChanged width and height do not match saved values, saving and reconnecting");
             saveConnectionSettings(width, height, bpp);
             handler.sendEmptyMessage(RemoteClientLibConstants.REINIT_SESSION);
         } else {
-            viewable.reallocateDrawable(width, height);
+            List<MonitorTarget> targets = getMonitorTargets();
+            if (!targets.isEmpty()) {
+                targets.get(0).viewable.reallocateDrawable(width, height);
+            }
         }
     }
 
@@ -640,14 +784,15 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
         // Send a message containing the certificate to our handler.
         Message m = new Message();
-        m.setTarget(handler);
+        Handler activeHandler = getActiveHandler();
+        m.setTarget(activeHandler);
         m.what = RemoteClientLibConstants.DIALOG_RDP_CERT;
         Bundle strings = new Bundle();
         strings.putString("subject", subject);
         strings.putString("issuer", issuer);
         strings.putString("fingerprint", fingerprint);
         m.obj = strings;
-        handler.sendMessage(m);
+        activeHandler.sendMessage(m);
 
         // Block while user decides whether to accept certificate or not.
         // The activity ends if the user taps "No", so we block indefinitely here.
@@ -686,15 +831,31 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     @Override
     public void OnGraphicsUpdate(int x, int y, int width, int height) {
         //Log.v(TAG, "OnGraphicsUpdate called: " + x +", " + y + " + " + width + "x" + height );
-        if (!receivedFirstGraphicsFrame) {
-            receivedFirstGraphicsFrame = true;
-            handler.sendEmptyMessage(RemoteClientLibConstants.GRAPHICS_FIRST_FRAME_RECEIVED);
+        if (session == null) {
+            return;
         }
-        if (viewable != null && session != null) {
-            Bitmap bitmap = viewable.getBitmap();
-            if (bitmap != null && x + width <= bitmap.getWidth() && y + height <= bitmap.getHeight()) {
-                LibFreeRDP.updateGraphics(session.getInstance(), bitmap, x, y, width, height);
-                viewable.reDraw(x, y, width, height);
+        int monitorWidth = getMonitorWidth();
+        synchronized (this) {
+            for (Map.Entry<Integer, MonitorTarget> entry : monitorTargets.entrySet()) {
+                RdpMonitorLayout.Region region = RdpMonitorLayout.intersect(
+                        x, y, width, height, entry.getKey(), monitorWidth);
+                if (region == null) {
+                    continue;
+                }
+                MonitorTarget target = entry.getValue();
+                if (!target.receivedFirstFrame) {
+                    target.receivedFirstFrame = true;
+                    target.handler.sendEmptyMessage(RemoteClientLibConstants.GRAPHICS_FIRST_FRAME_RECEIVED);
+                }
+                Bitmap bitmap = target.viewable.getBitmap();
+                if (bitmap != null && region.destinationX + region.width <= bitmap.getWidth()
+                        && region.destinationY + region.height <= bitmap.getHeight()) {
+                    LibFreeRDP.updateGraphicsRegion(session.getInstance(), bitmap,
+                            region.sourceX, region.sourceY, region.destinationX,
+                            region.destinationY, region.width, region.height);
+                    target.viewable.reDraw(region.destinationX, region.destinationY,
+                            region.width, region.height);
+                }
             }
         }
     }
@@ -702,13 +863,22 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     @Override
     public void OnGraphicsResize(int width, int height, int bpp) {
         Log.d(TAG, "OnGraphicsResize called " + width + "x" + height + ", bpp:" + bpp);
-        updateScreenSettings(width, height, bpp);
-        viewable.reallocateDrawable(width, height);
+        framebufferWidth = width;
+        framebufferHeight = height;
+        updateScreenSettings(width / monitorCount, height, bpp);
+        reallocateMonitorDrawables(width / monitorCount, height);
+    }
+
+    private void reallocateMonitorDrawables(int width, int height) {
+        for (MonitorTarget target : getMonitorTargets()) {
+            target.viewable.reallocateDrawable(width, height);
+        }
     }
 
     @Override
     public void OnRemoteClipboardChanged(String data) {
         Log.d(TAG, "OnRemoteClipboardChanged called.");
+        handler = getActiveHandler();
         remoteClipboardChanged(data);
     }
 

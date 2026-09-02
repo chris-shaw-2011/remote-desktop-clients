@@ -52,11 +52,14 @@ public class LabeledImageApapter extends BaseAdapter {
     private int numCols = 2;
     private String defaultLabel = "Untitled";
     private boolean doNotShowDesktopThumbnails = false;
+    private final View.OnContextClickListener contextClickListener;
 
-    public LabeledImageApapter(Context context, Map<String, Connection> connectionsByPosition, String[] filter, int maxNumCols) {
+    public LabeledImageApapter(Context context, Map<String, Connection> connectionsByPosition, String[] filter,
+                               int maxNumCols, View.OnContextClickListener contextClickListener) {
         this.context = context;
         this.numCols = maxNumCols;
         this.filter = filter;
+        this.contextClickListener = contextClickListener;
         if (connectionsByPosition != null) {
             for (Connection c : connectionsByPosition.values()) {
                 boolean include = true;
@@ -130,6 +133,7 @@ public class LabeledImageApapter extends BaseAdapter {
         // when the item is long-tapped or tapped respectively.
         TextView gridItemId = (TextView) gridView.findViewById(R.id.grid_item_id);
         gridItemId.setText(c.getRuntimeId());
+        gridView.setOnContextClickListener(contextClickListener);
 
         return gridView;
     }
