@@ -263,7 +263,6 @@ public class ConnectionGridActivity extends NormalizedScrollActivity implements 
             if (isDirectArdpCanvasIntent(intent)) {
                 intent.setClassName(this, ARDP_IN_PLACE_CANVAS_CLASS_NAME);
                 startActivity(intent);
-                finish();
             } else if (ARDP_PACKAGE_NAME.equals(getPackageName())) {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
                 startActivity(intent);
