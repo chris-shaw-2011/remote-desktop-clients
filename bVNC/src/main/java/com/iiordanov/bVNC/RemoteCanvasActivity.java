@@ -1528,6 +1528,25 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
 
     public Handler getHandler() { return handler; }
 
+    @Override
+    public void finish() {
+        if (!isFinishing() && shouldOpenConnectionScreenOnFinish()) {
+            Intent launchIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+            if (launchIntent != null) {
+                startActivity(launchIntent);
+            } else {
+                Log.e(TAG, "Unable to open connection screen because the launch intent is unavailable");
+            }
+        }
+        super.finish();
+    }
+
+    private boolean shouldOpenConnectionScreenOnFinish() {
+        return Utils.isRdp(this)
+                && isTaskRoot()
+                && getIntent().getIntExtra(EXTRA_RDP_MONITOR_INDEX, 0) == 0;
+    }
+
     private class ActionBarPositionSaver implements Runnable {
         public void run() {
             connection.setUseLastPositionToolbarX(toolbarMover.getLastX());
