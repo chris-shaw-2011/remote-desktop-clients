@@ -69,6 +69,7 @@ public class ConnectionSettings extends AbstractConnectionBean implements Serial
     private String inputMethod = "DirectSwipePan";
     private boolean rotationEnabled = true;
     private boolean requestingNewDisplayResolution = true;
+    private boolean fontSmoothing = true;
     private boolean audioPlaybackEnabled = false;
     private boolean usingCustomOvirtCa = false;
     private boolean sslStrict = true;
@@ -690,6 +691,7 @@ public class ConnectionSettings extends AbstractConnectionBean implements Serial
         editor.putString("inputMethod", inputMethod);
         editor.putBoolean("rotationEnabled", rotationEnabled);
         editor.putBoolean("requestingNewDisplayResolution", requestingNewDisplayResolution);
+        editor.putBoolean("fontSmoothing", fontSmoothing);
         editor.putBoolean("audioEnabled", audioPlaybackEnabled);
         editor.putBoolean("usingCustomCa", usingCustomOvirtCa);
         editor.putBoolean("sslStrict", sslStrict);
@@ -908,6 +910,7 @@ public class ConnectionSettings extends AbstractConnectionBean implements Serial
         audioPlaybackEnabled = sp.getBoolean("audioEnabled", false);
         rotationEnabled = sp.getBoolean("rotationEnabled", true);
         requestingNewDisplayResolution = sp.getBoolean("requestingNewDisplayResolution", true);
+        fontSmoothing = sp.getBoolean("fontSmoothing", true);
         usingCustomOvirtCa = sp.getBoolean("usingCustomCa", false);
         sslStrict = sp.getBoolean("sslStrict", true);
         usbEnabled = sp.getBoolean("usbEnabled", true);
@@ -1101,12 +1104,12 @@ public class ConnectionSettings extends AbstractConnectionBean implements Serial
 
     @Override
     public boolean getFontSmoothing() {
-        return false;
+        return fontSmoothing;
     }
 
     @Override
     public void setFontSmoothing(boolean fontSmoothing) {
-
+        this.fontSmoothing = fontSmoothing;
     }
 
     @Override
