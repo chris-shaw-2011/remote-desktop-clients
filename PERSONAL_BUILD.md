@@ -15,8 +15,10 @@ published.
   a 30-day Actions artifact, and creates a uniquely tagged GitHub Release.
 - `.github/workflows/sync-upstream.yml` runs every six hours and on demand. It
   fetches `upstream/master`, does nothing when that commit is already contained
-  in the fork's default branch, and otherwise creates and pushes a normal merge
-  commit. It never force-pushes. After a successful push, it calls the reusable
+  in the fork's default branch, and otherwise rebases the personal commits onto
+  upstream. It pushes with an explicit `--force-with-lease` tied to the previous
+  branch tip, so it refuses to overwrite a concurrent update. A conflict aborts
+  the rebase without pushing. After a successful push, it calls the reusable
   build workflow directly, so no PAT is needed to work around GitHub's
   `GITHUB_TOKEN` workflow-trigger restriction.
 
@@ -60,9 +62,9 @@ In **Settings > Actions > General**:
 
 1. Enable GitHub Actions for the repository.
 2. Under **Workflow permissions**, select **Read and write permissions**.
-3. Leave Actions allowed to create releases and push to `master`. If a branch
-   protection rule or ruleset blocks direct pushes, allow `github-actions[bot]`
-   to bypass that rule (or otherwise permit this workflow's merge commits).
+3. Leave Actions allowed to create releases and push rebased history to `master`.
+   If a branch protection rule or ruleset blocks these updates, allow
+   `github-actions[bot]` to bypass that rule for the sync workflow.
 
 In **Settings > Secrets and variables > Actions**, create these repository
 secrets:
@@ -129,23 +131,29 @@ built by the reusable workflow within the same run.
 
 ## Recover from an upstream conflict
 
-If the automatic merge conflicts, the workflow fails without pushing. Resolve
-the merge locally with normal Git commands, review and test the result, then
-push the resolved merge to `master`:
+If the automatic rebase conflicts, the workflow fails without pushing. Start
+from the current remote fork branch, resolve the rebase locally, then review
+and test the result before updating `master`:
 
 ```bash
 git remote add upstream https://github.com/iiordanov/remote-desktop-clients.git
+git fetch origin master
 git fetch upstream master
-git switch master
-git merge --no-ff upstream/master
+old_head=$(git rev-parse origin/master)
+git switch -c resolve-upstream origin/master
+git rebase upstream/master
 # Resolve the files reported by Git, then:
 git add <resolved-files>
-git commit
-git push origin master
+git rebase --continue
+# Repeat resolution/continue as needed, then review and test before pushing:
+git push --force-with-lease="refs/heads/master:$old_head" origin HEAD:master
 ```
 
 If an `upstream` remote already exists, use `git remote set-url upstream ...`
 instead of `git remote add`. The push starts the normal aRDP build workflow.
+If the lease rejects the push, fetch and account for the newer fork changes
+before trying again. See [`docs/UPSTREAM_MAINTENANCE.md`](docs/UPSTREAM_MAINTENANCE.md)
+for the personal feature map and upstream-first integration procedure.
 
 ## Signing-key rotation
 
