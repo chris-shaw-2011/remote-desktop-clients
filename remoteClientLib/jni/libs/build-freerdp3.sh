@@ -7,7 +7,7 @@ set -u
 
 sdk_root=${ANDROID_SDK:-${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}}
 : "${sdk_root:?Set ANDROID_SDK to the Android SDK directory}"
-ndk_root=${FREERDP_NDK:-$PWD/android-ndk-r25c}
+ndk_root=${FREERDP_NDK:-$PWD/android-ndk-$freerdp_ndk_version}
 cmake_program=${FREERDP_CMAKE:-$(command -v cmake)}
 if [[ ! -f "$ndk_root/source.properties" ]]; then
     source build-deps-functions.sh
@@ -30,7 +30,7 @@ fetch() {
 
 fetch "$freerdp_source_url" "$cache_dir/freerdp-$freerdp_ver.tar.gz" "$freerdp_source_hash"
 fetch "https://github.com/openssl/openssl/releases/download/openssl-$freerdp_openssl_ver/openssl-$freerdp_openssl_ver.tar.gz" "$cache_dir/openssl-$freerdp_openssl_ver.tar.gz" "$freerdp_openssl_hash"
-fetch "$freerdp_ffmpeg_url" "$cache_dir/ffmpeg-$freerdp_ffmpeg_ver.tar.gz" "$freerdp_ffmpeg_hash"
+fetch "$freerdp_ffmpeg_url" "$cache_dir/$freerdp_ffmpeg_archive" "$freerdp_ffmpeg_hash"
 
 patches=(freerdp3-build.patch ../../freerdp-adapter/java.patch freerdp3-patches/*.patch)
 fingerprint=$({
@@ -38,7 +38,7 @@ fingerprint=$({
     sha256sum build-deps.conf build-freerdp3.sh "${patches[@]}" "$ndk_root/source.properties"
 } | sha256sum | cut -d' ' -f1)
 output=$source_dir/client/Android/Studio/freeRDPCore/src/main/jniLibs
-artifacts=(libfreerdp-android.so libfreerdp3.so libfreerdp-client3.so libwinpr3.so libssl.so libcrypto.so libavcodec.so libavutil.so libswscale.so libswresample.so)
+artifacts=(libfreerdp-android.so libfreerdp3.so libfreerdp-client3.so libwinpr3.so libssl.so libcrypto.so libavcodec.so libavutil.so libswscale.so libswresample.so libjpeg.so liburiparser.so)
 complete=true
 for abi in $abis; do
     for library in "${artifacts[@]}"; do
@@ -76,7 +76,7 @@ for abi in $abis; do
         -DFREERDP_OPENSSL_URL="file://$cache_dir/openssl-$freerdp_openssl_ver.tar.gz" \
         -DFREERDP_FFMPEG_VERSION="$freerdp_ffmpeg_ver" \
         -DFREERDP_FFMPEG_HASH="SHA256=$freerdp_ffmpeg_hash" \
-        -DFREERDP_FFMPEG_URL="file://$cache_dir/ffmpeg-$freerdp_ffmpeg_ver.tar.gz" \
+        -DFREERDP_FFMPEG_URL="file://$cache_dir/$freerdp_ffmpeg_archive" \
         -DWITH_MEDIACODEC=ON -DWITH_FFMPEG=ON -DWITH_OPENSSL=ON -DWITH_OPENH264=OFF \
         -DWITH_CJSON=OFF -DWITH_OPUS=OFF -DWITH_PNG=OFF -DWITH_WEBP=OFF -DWITH_JPEG=ON
     CMAKE_BUILD_PARALLEL_LEVEL="$jobs" "$cmake_program" --build "$build_dir" --parallel "$jobs"

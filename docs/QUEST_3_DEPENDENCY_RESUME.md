@@ -15,22 +15,23 @@ user's untracked `docs/QUEST_3_DEPENDENCY_UPDATE_PLAN.md`.
 | 69c86295 | SQLCipher4.20 / SQLite2.7.1 / min23 | All app releases, 46 affected tests, graph, ARM64 library/alignment |
 | 9ffa4937 | Android UI/lifecycle bundle | All app releases, 46 affected tests, graph; Core requires compile37, target stays36 |
 | f241056c | Native RDP OpenSSL3.5.9, separate from unchanged SPICE pin | Clean ARM64 build, all app releases, 46 affected tests, packaged hash/linkage/alignment |
-| Current FreeRDP commit | FreeRDP/WinPR3.33.0, slim module, native ports and certificate/probe tests | Clean ARM64 build, all app releases, 61 tests, JNI23 methods/25 callbacks, graph, APK/native audit |
+| cf65bfc0 | FreeRDP/WinPR3.33.0, slim module, native ports and certificate/probe tests | Clean ARM64 build, all app releases, 61 tests, JNI23 methods/25 callbacks, graph, APK/native audit |
 
-Native FreeRDP3 is verified and ready for its commit (or already committed if
-`git log` shows it). Its intermediate FFmpeg4.4.1 pin is intentional: **FFmpeg9
-is still required next**. No signing, installation or publishing occurred.
+Native FreeRDP3 is committed as `cf65bfc0`. FFmpeg9.0.2 recipe changes are now
+prepared but await parent clean build and packaging verification before their
+separate commit. No signing, installation or publishing occurred.
 Physical Quest/database/Windows/NLA/decoder/audio/LAN/WireGuard acceptance remains
 pending. No Android device was connected.
 
 ## Exact next work
 
-1. If necessary finish committing the staged, verified FreeRDP3 update. Patch
-   context lines have intentional leading spaces: run whitespace checks excluding
-   `*.patch`, and retain strict patch application checks. Do not alter patch context
-   just to satisfy generic whitespace lint.
-2. Delegate FFmpeg9.0.2 separately, verify clean native build, all app releases,
-   affected tests and packaged versions/linkage, then commit before next agent.
+1. FreeRDP3 is committed. Patch context lines have intentional leading spaces:
+   run whitespace checks excluding `*.patch`, and retain strict patch application
+   checks. Do not alter patch context just to satisfy generic whitespace lint.
+2. Verify the prepared FFmpeg9.0.2 update with a clean native build, all app
+   releases, affected tests and packaged versions/linkage, then commit before the
+   next agent. Codec decision and pending physical acceptance are documented in
+   `QUEST_3_DEPENDENCY_PROGRESS.md`; no FFmpeg4/8 fallback is permitted.
 3. Delegate Bouncy Castle next, then SnakeYAML2.7, each verified and committed.
    Official BC page showed provider/PKIX/utility1.86 but TLS1.86.1; recheck that
    patch release under the plan's security-update instruction. Leave SpongyCastle
@@ -72,8 +73,7 @@ Verified archives in `/tmp` and `remoteClientLib/jni/libs/tar/rdp`:
 - FreeRDP3.33 SHA25680cbcf17a7de00909f2be805c7d93764596cd712046addc18c30594137c0b879;
   pristine `/tmp/freerdp-3.33.0`.
 - OpenSSL3.5.9 SHA256603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a.
-- FFmpeg4.4.1 SHA25682b43cc67296bcd01a59ae6b327cdb50121d3a9e35f41a30de1edd71bb4a6666.
-- **Next FFmpeg9.0.2** official `/tmp/ffmpeg-9.0.2.tar.xz`, SHA256
+- **Prepared FFmpeg9.0.2** official `/tmp/ffmpeg-9.0.2.tar.xz`, SHA256
   8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e.
   Detached signature verified with upstream key
   FCF986EA15E6E293A5644F10B4322F04D67658D8. GitHub n9.0.2 tar also exists in /tmp.

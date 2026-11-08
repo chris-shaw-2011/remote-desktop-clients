@@ -3,8 +3,7 @@
 ## FreeRDP / WinPR 3.33.0
 
 The stack uses verified FreeRDP 3.33.0 source and Android CMake ExternalDeps,
-OpenSSL 3.5.9 and intermediate FFmpeg 4.4.1. FFmpeg 9 is the next separate
-update; this combination is not the final release target. The slim embedded
+OpenSSL 3.5.9 and verified FFmpeg 9.0.2. FreeRDP 3 was committed as `cf65bfc0`. The slim embedded
 module excludes upstream Room, bookmark persistence and standalone UI. The
 [patch replacement map](FREERDP_3_PATCH_MAP.md) accounts for all 27 old patches.
 Native CMake is 3.28.3 (ExternalDeps needs >=3.24), with existing NDK r25c,
@@ -29,6 +28,46 @@ is not claimed. App ID, version and target SDK remain unchanged. Physical Quest
 connection, graphics, certificate/NLA, audio, independent/multi-monitor sessions
 and sustained-use acceptance remain pending. Host-only old certificate pins
 require renewed confirmation because their format does not bind a port.
+
+## FFmpeg 9.0.2
+
+The tracked RDP recipe pins the official `ffmpeg-9.0.2.tar.xz` release archive,
+SHA-256 `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`.
+Its detached signature was verified against upstream key
+`FCF986EA15E6E293A5644F10B4322F04D67658D8`. The cache and ExternalDeps file URL
+retain the archive's real `.tar.xz` name. Release headers identify avcodec
+63.1.102, avutil 61.1.102, swscale 10.1.102 and swresample 7.1.102.
+
+The codec whitelist follows FreeRDP 3.33.0's `h264_ffmpeg.c` and
+`dsp_ffmpeg.c`: software H.264 decoding and its parser, PCM U8/U16LE and AAC
+encoding/decoding, plus Opus decoding. The upstream nonexperimental DSP filter
+excludes ADPCM, GSM, G.723 and A-law/mu-law. Native Opus encoding remains
+experimental in FFmpeg 9, and FreeRDP does not enable its required compliance
+mode; omitting that encoder avoids advertising unsupported microphone formats.
+PCM and AAC microphone paths remain available where FreeRDP supports them;
+MediaCodec can handle AAC separately. No external codec library is added.
+
+The build retains avcodec, avutil, swscale and swresample and disables automatic
+external-library discovery, all components before the whitelist, file formats,
+protocols/network, filters, devices, programs and unrelated hardware accelerators.
+FreeRDP's native MediaCodec backend stays enabled and bypasses FFmpeg video
+when selected; software H.264 fallback remains available. FFmpeg's own MediaCodec
+support is compiled without adding another video decoder. OpenH264 stays off,
+and the buffered 150 ms OpenSL configuration is unchanged. The wrapper now
+checks its staged JPEG/URI-parser libraries and derives its default NDK path
+from the tracked version. Its existing fingerprint covers these changed inputs.
+
+Clean ARM64 native compilation, every application release and all 61 local tests
+pass (`/tmp/quest-ffmpeg9-native.log`, `/tmp/quest-ffmpeg9-apps.log`). The four
+packaged FFmpeg libraries match clean output hashes and align to 16 KB; libavutil
+reports 9.0.2, with no old 4.4.1 version marker. All 17 ARM64 libraries resolve
+DT_NEEDED dependencies and the APK passes ZIP alignment. The codec list matches
+the whitelist above, static JNI audit still passes 23 methods/25 callback sites,
+and unchanged inputs skip rebuilding. Physical Quest acceptance remains pending for
+native MediaCodec and deliberately selected software fallback, AVC420/AVC444,
+resize/color/text rendering, independent and multi-monitor sessions, sound,
+microphone if used, reconnects, and LAN/WireGuard. No attached device is available;
+source inspection alone does not establish FFmpeg 9 runtime compatibility.
 
 ## Android UI and lifecycle
 
