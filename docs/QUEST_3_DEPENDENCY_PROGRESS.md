@@ -1,5 +1,11 @@
 # Quest 3 dependency update progress
 
+## Android UI and lifecycle
+
+The shared UI dependency declarations target Core/KTX 1.19.1, AppCompat 1.8.0, Material 1.14.0, Activity/KTX 1.13.0, Fragment/KTX 1.9.1, Lifecycle modules in the existing graph 2.11.0, Preference/KTX 1.2.1 and VectorDrawable 1.2.0. Transitive modules are aligned with constraints, not forced. Core KTX remains declared until the resulting graph and compilation are verified. The Core and Core KTX 1.19.1 AAR metadata requires compile SDK 37, so the shared compile SDK is now 37; target SDK remains 36 and minimum SDK remains 23. [Material 1.14.0 release notes](https://github.com/material-components/material-components-android/releases/tag/1.14.0) specify minimum SDK 23 and a library compile SDK of 35. No application lifecycle change is made. The aRDP CI workflow derives the platform from the shared compile SDK and uses `platforms;android-37.0`, the package identifier recorded by the installed SDK.
+
+Root `assembleRelease`, the 46 focused common/bVNC/remoteClientLib tests and the aRDP runtime dependency report pass with the requested UI versions aligned. Kotlin remains 2.2.21, AGP 9.4.1 and Gradle 9.6.0. The ARM64 APK retains application ID/version and target 36/minimum 23, compiles against API 37, and passes ZIP alignment. Log: `/tmp/quest-ui-validation-sdk37.log`. Physical Quest acceptance remains necessary for panel focus and lifecycle, Back, keyboard and pointer input, resizing, dialogs, reconnects, independent sessions, and shared multi-monitor sessions on LAN and WireGuard.
+
 ## SQLCipher and SQLite
 
 The shared minimum SDK is 23 (the separate Quest ADB helper remains 34). The database binding is SQLCipher Android 4.20.0 and AndroidX SQLite/KTX 2.7.1. The schema remains version 642; no automatic `cipher_migrate` is invoked. Zetetic's [migration guide](https://www.zetetic.net/sqlcipher/sqlcipher-for-android-migration/) describes the replacement binding and native loading; [AndroidX release notes](https://developer.android.com/jetpack/androidx/releases/sqlite) list 2.7.1. SQLCipher 4.5.4 and 4.20.0 both use the SQLCipher 4 default format; [Zetetic documents major-version compatibility settings](https://www.zetetic.net/sqlcipher/sqlcipher-api/#pragma-cipher_compatibility). Databases configured with older or nondefault formats require separate investigation.

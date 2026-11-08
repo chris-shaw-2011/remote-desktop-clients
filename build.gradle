@@ -23,7 +23,7 @@ allprojects {
 
 ext {
     toolsVersion = properties.get('TOOLS_VERSION', '35.0.0')
-    compileApi = properties.get('COMPILE_API', 36)
+    compileApi = properties.get('COMPILE_API', 37)
     targetApi = properties.get('TARGET_API', 36)
     minApi = properties.get('MIN_API', 23)
 }

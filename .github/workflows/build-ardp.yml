@@ -121,9 +121,14 @@ jobs:
           fi
 
           yes | "$sdkmanager_path" --licenses >/dev/null || true
+          # API 37's SDK package uses a minor version in its identifier.
+          platform_api="$compile_api"
+          if (( compile_api >= 37 )); then
+            platform_api="${compile_api}.0"
+          fi
           "$sdkmanager_path" \
             "platform-tools" \
-            "platforms;android-$compile_api" \
+            "platforms;android-$platform_api" \
             "build-tools;$tools_version"
 
           build_tools="$sdk_root/build-tools/$tools_version"

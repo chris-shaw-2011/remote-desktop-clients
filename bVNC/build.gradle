@@ -46,17 +46,17 @@ dependencies {
     implementation project(':remoteClientLib')
     implementation project(':remoteClientLib:jni:libs:deps:FreeRDP:client:Android:Studio:freeRDPCore')
     implementation group: 'org.bouncycastle', name: 'bctls-jdk18on', version: '1.80'
-    implementation group: 'androidx.appcompat', name: 'appcompat', version: '1.7.1'
-    implementation 'com.google.android.material:material:1.13.0'
+    implementation group: 'androidx.appcompat', name: 'appcompat', version: '1.8.0'
+    implementation 'com.google.android.material:material:1.14.0'
     implementation group: 'androidx.legacy', name: 'legacy-support-v4', version: '1.0.0'
-    implementation group: 'androidx.vectordrawable', name: 'vectordrawable', version: '1.1.0'
-    implementation group: 'androidx.preference', name: 'preference-ktx', version: '1.2.0'
+    implementation group: 'androidx.vectordrawable', name: 'vectordrawable', version: '1.2.0'
+    implementation group: 'androidx.preference', name: 'preference-ktx', version: '1.2.1'
     implementation "net.zetetic:sqlcipher-android:4.20.0"
     implementation "androidx.sqlite:sqlite-ktx:2.7.1"
     implementation group: 'org.yaml', name: 'snakeyaml', version: '2.4'
     implementation 'org.apache.httpcomponents:httpcore:4.4.10'
     implementation "com.github.luben:zstd-jni:1.5.7-4@aar"
-    implementation "androidx.core:core-ktx:1.7.0"
+    implementation "androidx.core:core-ktx:1.19.1"
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 
     implementation 'com.google.android.play:review:2.0.1'
@@ -64,6 +64,17 @@ dependencies {
     implementation project(path: ':common')
     implementation 'com.google.android.gms:play-services-base:18.0.1'
     implementation 'jcifs:jcifs:1.3.17'
+
+    // Align transitive UI components without adding modules that are not in use.
+    constraints {
+        ['activity', 'activity-ktx'].each { implementation "androidx.activity:$it:1.13.0" }
+        ['fragment', 'fragment-ktx'].each { implementation "androidx.fragment:$it:1.9.1" }
+        ['lifecycle-common', 'lifecycle-livedata', 'lifecycle-livedata-core',
+         'lifecycle-livedata-core-ktx', 'lifecycle-process', 'lifecycle-runtime',
+         'lifecycle-runtime-ktx', 'lifecycle-viewmodel', 'lifecycle-viewmodel-ktx',
+         'lifecycle-viewmodel-savedstate'].each { implementation "androidx.lifecycle:$it:2.11.0" }
+        implementation 'androidx.vectordrawable:vectordrawable-animated:1.2.0'
+    }
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.17'
