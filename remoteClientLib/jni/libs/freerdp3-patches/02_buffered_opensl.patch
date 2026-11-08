@@ -1,8 +1,6 @@
-diff --git a/channels/rdpsnd/client/opensles/opensl_io.c b/channels/rdpsnd/client/opensles/opensl_io.c
-index 61afc10..3d6f6f4 100644
 --- a/channels/rdpsnd/client/opensles/opensl_io.c
 +++ b/channels/rdpsnd/client/opensles/opensl_io.c
-@@ -33,6 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+@@ -33,6 +33,7 @@
  #include "opensl_io.h"
  #define CONV16BIT 32768
  #define CONVMYFLT (1. / 32768.)
@@ -10,36 +8,47 @@ index 61afc10..3d6f6f4 100644
  
  static void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void* context);
  
-@@ -227,8 +228,8 @@ static SLresult openSLPlayOpen(OPENSL_STREAM* p)
+@@ -227,8 +228,8 @@
  		if (result != SL_RESULT_SUCCESS)
  			goto end_openaudio;
  
 -		// set the player's state to playing
 -		result = (*p->bqPlayerPlay)->SetPlayState(p->bqPlayerPlay, SL_PLAYSTATE_PLAYING);
-+		// Playback starts after android_AudioOut queues a short silence cushion.
++		// Start after a silence cushion has been queued.
 +		result = (*p->bqPlayerPlay)->SetPlayState(p->bqPlayerPlay, SL_PLAYSTATE_STOPPED);
  		DEBUG_SND("SetPlayState=%" PRIu32 "", result);
- 		assert(!result);
+ 		WINPR_ASSERT(!result);
  	end_openaudio:
-@@ -281,22 +282,17 @@ OPENSL_STREAM* android_OpenAudioDevice(int sr, int outchannels, int bufferframes
+@@ -273,6 +274,9 @@
+ OPENSL_STREAM* android_OpenAudioDevice(int sr, int outchannels, int bufferframes)
+ {
+ 	OPENSL_STREAM* p;
++	if (sr <= 0 || outchannels <= 0 || bufferframes < 2)
++		return nullptr;
++
+ 	p = (OPENSL_STREAM*)calloc(1, sizeof(OPENSL_STREAM));
+ 
+ 	if (!p)
+@@ -281,22 +285,18 @@
  	p->queuesize = bufferframes;
  	p->outchannels = outchannels;
  	p->sr = sr;
 +	p->queue = Queue_New(TRUE, -1, -1);
++	p->bufferAvailable = CreateEvent(nullptr, FALSE, FALSE, nullptr);
  
 -	if (openSLCreateEngine(p) != SL_RESULT_SUCCESS)
-+	if (!p->queue)
- 	{
- 		android_CloseAudioDevice(p);
- 		return NULL;
- 	}
- 
--	if (openSLPlayOpen(p) != SL_RESULT_SUCCESS)
 -	{
 -		android_CloseAudioDevice(p);
--		return NULL;
+-		return nullptr;
 -	}
 -
+-	if (openSLPlayOpen(p) != SL_RESULT_SUCCESS)
++	if (!p->queue || !p->bufferAvailable)
+ 	{
+ 		android_CloseAudioDevice(p);
+ 		return nullptr;
+ 	}
+ 
 -	p->queue = Queue_New(TRUE, -1, -1);
 -
 -	if (!p->queue)
@@ -48,9 +57,9 @@ index 61afc10..3d6f6f4 100644
 +	    (openSLPlayOpen(p) != SL_RESULT_SUCCESS))
  	{
  		android_CloseAudioDevice(p);
- 		return NULL;
-@@ -311,6 +307,12 @@ void android_CloseAudioDevice(OPENSL_STREAM* p)
- 	if (p == NULL)
+ 		return nullptr;
+@@ -311,10 +311,18 @@
+ 	if (p == nullptr)
  		return;
  
 +	if (p->bqPlayerPlay)
@@ -62,10 +71,16 @@ index 61afc10..3d6f6f4 100644
  	openSLDestroyEngine(p);
  
  	if (p->queue)
-@@ -325,13 +327,22 @@ static void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void* context)
+ 		Queue_Free(p->queue);
++	if (p->bufferAvailable)
++		CloseHandle(p->bufferAvailable);
+ 
+ 	free(p);
+ }
+@@ -325,26 +333,39 @@
  	OPENSL_STREAM* p = (OPENSL_STREAM*)context;
- 	assert(p);
- 	assert(p->queue);
+ 	WINPR_ASSERT(p);
+ 	WINPR_ASSERT(p->queue);
 +	Queue_Lock(p->queue);
  	void* data = Queue_Dequeue(p->queue);
  	free(data);
@@ -74,6 +89,7 @@ index 61afc10..3d6f6f4 100644
 +		p->playing = FALSE;
 +
 +	Queue_Unlock(p->queue);
++	(void)SetEvent(p->bufferAvailable);
  }
  
  // puts a buffer of size samples to the device
@@ -82,11 +98,24 @@ index 61afc10..3d6f6f4 100644
 +	SLresult result;
 +	void* data;
 +	BOOL restarting;
- 	assert(p);
- 	assert(buffer);
- 	assert(size > 0);
-@@ -344,7 +355,7 @@ int android_AudioOut(OPENSL_STREAM* p, const short* buffer, int size)
- 		return -1;
+ 	WINPR_ASSERT(p);
+ 	WINPR_ASSERT(buffer);
+ 	WINPR_ASSERT(size > 0);
+ 
+-	HANDLE ev = Queue_Event(p->queue);
+-	/* Assure, that the queue is not full. */
+-	if (p->queuesize <= Queue_Count(p->queue) && WaitForSingleObject(ev, INFINITE) == WAIT_FAILED)
++	/* Queue_Event signals a non-empty queue, not a free slot. Wait for a callback
++	 * instead, then recheck capacity before submitting another OpenSL buffer. */
++	while (p->queuesize <= Queue_Count(p->queue))
+ 	{
+-		DEBUG_SND("WaitForSingleObject failed!");
+-		return -1;
++		if (WaitForSingleObject(p->bufferAvailable, INFINITE) != WAIT_OBJECT_0)
++		{
++			DEBUG_SND("WaitForSingleObject failed!");
++			return -1;
++		}
  	}
  
 -	void* data = calloc(size, sizeof(short));
@@ -94,12 +123,10 @@ index 61afc10..3d6f6f4 100644
  
  	if (!data)
  	{
-@@ -353,9 +364,62 @@ int android_AudioOut(OPENSL_STREAM* p, const short* buffer, int size)
+@@ -353,13 +374,65 @@
  	}
  
  	memcpy(data, buffer, size * sizeof(short));
--	Queue_Enqueue(p->queue, data);
--	(*p->bqPlayerBufferQueue)->Enqueue(p->bqPlayerBufferQueue, data, sizeof(short) * size);
 +	Queue_Lock(p->queue);
 +	restarting = !p->playing;
 +	p->playing = TRUE;
@@ -125,12 +152,16 @@ index 61afc10..3d6f6f4 100644
 +		             ->Enqueue(p->bqPlayerBufferQueue, silence,
 +		                       sizeof(short) * silenceSamples);
 +		if (result != SL_RESULT_SUCCESS)
++		{
++			free(data); /* Not owned by p->queue yet. */
 +			goto fail;
++		}
 +	}
 +
-+	if (!Queue_Enqueue(p->queue, data))
-+	{
-+		free(data);
+ 	if (!Queue_Enqueue(p->queue, data))
+ 	{
+ 		free(data);
+-		return -1;
 +		goto fail;
 +	}
 +
@@ -144,7 +175,8 @@ index 61afc10..3d6f6f4 100644
 +		result = (*p->bqPlayerPlay)->SetPlayState(p->bqPlayerPlay, SL_PLAYSTATE_PLAYING);
 +		if (result != SL_RESULT_SUCCESS)
 +			goto fail;
-+	}
+ 	}
+-	(*p->bqPlayerBufferQueue)->Enqueue(p->bqPlayerBufferQueue, data, sizeof(short) * size);
 +
 +	Queue_Unlock(p->queue);
  	return size;
@@ -159,28 +191,14 @@ index 61afc10..3d6f6f4 100644
  }
  
  int android_GetOutputMute(OPENSL_STREAM* p)
-diff --git a/channels/rdpsnd/client/opensles/opensl_io.h b/channels/rdpsnd/client/opensles/opensl_io.h
-index 57dc048..c4b1b30 100644
 --- a/channels/rdpsnd/client/opensles/opensl_io.h
 +++ b/channels/rdpsnd/client/opensles/opensl_io.h
-@@ -63,6 +63,7 @@ extern "C"
+@@ -63,6 +63,8 @@
  
  		unsigned int queuesize;
  		wQueue* queue;
++		HANDLE bufferAvailable;
 +		BOOL playing;
  	} OPENSL_STREAM;
  
  	/*
-diff --git a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
-index 0f4a921..359d8dd 100644
---- a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
-+++ b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
-@@ -370,7 +370,7 @@ public class LibFreeRDP
- 		args.add("/audio-mode:" + String.valueOf(advanced.getRedirectSound()));
- 		if (advanced.getRedirectSound() == 0)
- 		{
--			args.add("/sound");
-+			args.add("/sound:latency:150");
- 		}
- 
- 		if (advanced.getRedirectMicrophone())

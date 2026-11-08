@@ -1,5 +1,11 @@
 # RDP audio playback on Quest
 
+The November 8 dependency migration ports this policy to FreeRDP 3.33.0 using
+[`02_buffered_opensl.patch`](../remoteClientLib/jni/libs/freerdp3-patches/02_buffered_opensl.patch)
+and explicitly selects OpenSL with 150 ms latency. AAudio remains disabled pending
+Quest measurements. The original 2.11.7 diagnosis below is historical; see the
+[dependency progress](QUEST_3_DEPENDENCY_PROGRESS.md) for current build evidence.
+
 Status: implemented on August 21, 2026. Physical Quest 3 validation remains
 outstanding.
 

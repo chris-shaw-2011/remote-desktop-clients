@@ -1,0 +1,105 @@
+--- a/cmake/DepVersions.cmake
++++ b/cmake/DepVersions.cmake
+@@ -1,5 +1,5 @@
+-set(OPENSSL_VERSION "openssl-4.0.1")
+-set(OPENSSL_HASH "SHA256=2db3f3a0d6ea4b59e1f094ace2c8cd536dffb87cdc39084c5afa1e6f7f37dd09")
++set(OPENSSL_VERSION "${FREERDP_OPENSSL_VERSION}")
++set(OPENSSL_HASH "${FREERDP_OPENSSL_HASH}")
+ 
+ set(CJSON_VERSION "v1.7.19")
+ set(CJSON_HASH "SHA256=7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562")
+@@ -21,5 +21,5 @@
+ 
+ set(OPENH264_TAG v2.6.0)
+ 
+-set(FFMPEG_VERSION "n8.1")
+-set(FFMPEG_HASH "SHA256=dd308201bb1239a1b73185f80c6b4121f4efdfa424a009ce544fd00bf736bb2e")
++set(FFMPEG_VERSION "${FREERDP_FFMPEG_VERSION}")
++set(FFMPEG_HASH "${FREERDP_FFMPEG_HASH}")
+--- a/client/Android/cmake/ExternalDeps.cmake
++++ b/client/Android/cmake/ExternalDeps.cmake
+@@ -1,7 +1,7 @@
+ include(GNUInstallDirs)
+ 
+ # FREERDP_EXTERNAL_PATH points here; FreeRDP appends /${ANDROID_ABI}/ internally
+-set(DEPS_EXTERNAL_ROOT "${CMAKE_CURRENT_LIST_DIR}/../Studio/freeRDPCore/src/main/jniLibs")
++set(DEPS_EXTERNAL_ROOT "${FREERDP_DEPENDENCY_PREFIX}")
+ 
+ # All external deps install into this ABI-scoped prefix
+ set(DEPS_INSTALL_DIR "${DEPS_EXTERNAL_ROOT}/${CMAKE_ANDROID_ARCH_ABI}")
+@@ -22,6 +22,7 @@
+     -DANDROID_PLATFORM:STRING=android-${NDK_API_LEVEL}
+     -DANDROID_STL:STRING=c++_shared
+     -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
++    -DCMAKE_SHARED_LINKER_FLAGS:STRING=-Wl,-z,max-page-size=16384
+     -DCMAKE_MAKE_PROGRAM:FILEPATH=${CMAKE_MAKE_PROGRAM}
+     -DBUILD_SHARED_LIBS:BOOL=ON
+     -DCMAKE_INSTALL_PREFIX:PATH=${DEPS_INSTALL_DIR}
+--- a/client/Android/cmake/ExternalOpenSSL.cmake
++++ b/client/Android/cmake/ExternalOpenSSL.cmake
+@@ -23,17 +23,16 @@
+   DOWNLOAD_EXTRACT_TIMESTAMP OFF
+   SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/openssl
+   BINARY_DIR ${CMAKE_BINARY_DIR}/external/openssl
+-  URL https://github.com/openssl/openssl/releases/download/${OPENSSL_VERSION}/${OPENSSL_VERSION}.tar.gz
++  URL ${FREERDP_OPENSSL_URL}
+   URL_HASH ${OPENSSL_HASH}
+   LIST_SEPARATOR |
+   CONFIGURE_COMMAND
+     ${CMAKE_COMMAND} -E env PATH=${NDK_TOOLCHAIN_BIN}:$ENV{PATH} ANDROID_NDK=${NDK_ROOT} ANDROID_NDK_ROOT=${NDK_ROOT}
+-    ANDROID_NDK_HOME=${NDK_ROOT} CC=clang perl <SOURCE_DIR>/Configure ${OSSL_ARCH} shared no-tests no-apps no-docs
++    ANDROID_NDK_HOME=${NDK_ROOT} CC=clang perl <SOURCE_DIR>/Configure ${OSSL_ARCH} shared no-module no-tests no-apps no-docs -Wl,-z,max-page-size=16384
+     -U__ANDROID_API__ -D__ANDROID_API__=${NDK_API_LEVEL} --prefix=${DEPS_INSTALL_DIR} --libdir=${CMAKE_INSTALL_LIBDIR}
+   BUILD_COMMAND ${CMAKE_COMMAND} -E env PATH=${NDK_TOOLCHAIN_BIN}:$ENV{PATH} ANDROID_NDK=${NDK_ROOT}
+-                ANDROID_NDK_ROOT=${NDK_ROOT} ANDROID_NDK_HOME=${NDK_ROOT} make -j SHLIB_EXT=.so build_libs
++                ANDROID_NDK_ROOT=${NDK_ROOT} ANDROID_NDK_HOME=${NDK_ROOT} make -j${FREERDP_BUILD_JOBS} SHLIB_EXT=.so build_libs
+   INSTALL_COMMAND
+     ${CMAKE_COMMAND} -E env PATH=${NDK_TOOLCHAIN_BIN}:$ENV{PATH} ANDROID_NDK=${NDK_ROOT} ANDROID_NDK_ROOT=${NDK_ROOT}
+-    ANDROID_NDK_HOME=${NDK_ROOT} make -j SHLIB_EXT=.so install_sw && ${CMAKE_COMMAND} -E copy_directory
+-    ${DEPS_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}/ossl-modules ${DEPS_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}
++    ANDROID_NDK_HOME=${NDK_ROOT} make -j${FREERDP_BUILD_JOBS} SHLIB_EXT=.so install_sw
+ )
+--- a/client/Android/cmake/ExternalFFmpeg.cmake
++++ b/client/Android/cmake/ExternalFFmpeg.cmake
+@@ -64,7 +64,7 @@
+   DOWNLOAD_EXTRACT_TIMESTAMP OFF
+   SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/ffmpeg
+   BINARY_DIR ${CMAKE_BINARY_DIR}/external/ffmpeg
+-  URL https://github.com/FFmpeg/FFmpeg/archive/refs/tags/${FFMPEG_VERSION}.tar.gz
++  URL ${FREERDP_FFMPEG_URL}
+   URL_HASH ${FFMPEG_HASH}
+   LIST_SEPARATOR |
+   DEPENDS ${ANDROID_NATIVE_DEPS}
+@@ -73,9 +73,9 @@
+     "PKG_CONFIG_PATH=${DEPS_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}/pkgconfig" ${FFMPEG_BIGENDIAN_ENV}
+     <SOURCE_DIR>/configure --cross-prefix=${NDK_TOOLCHAIN_BIN}/llvm- --cc=${FFMPEG_CC} --cxx=${FFMPEG_CXX}
+     --pkg-config=${PKG_CONFIG_EXECUTABLE} --sysroot=${NDK_SYSROOT} --arch=${FFMPEG_ARCH} ${FFMPEG_CPU}
+-    --extra-ldflags="${FFMPEG_LDFLAGS}" ${FFMPEG_EXTRA_ARGS} --target-os=android --enable-cross-compile --enable-pic
+-    --enable-lto --enable-jni --enable-mediacodec --enable-shared --disable-static --disable-programs --disable-doc
++    --extra-ldflags=${FFMPEG_LDFLAGS}\ -Wl,-z,max-page-size=16384 ${FFMPEG_EXTRA_ARGS} --target-os=android --enable-cross-compile --enable-pic
++    --enable-lto --enable-jni --enable-mediacodec --enable-shared --disable-static --disable-programs --disable-doc --disable-avdevice --disable-avfilter --disable-avformat --disable-network
+     --prefix=${DEPS_INSTALL_DIR} --libdir=${DEPS_INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}
+-  BUILD_COMMAND ${CMAKE_COMMAND} -E env "PATH=${NDK_TOOLCHAIN_BIN}:$ENV{PATH}" make -j
+-  INSTALL_COMMAND ${CMAKE_COMMAND} -E env "PATH=${NDK_TOOLCHAIN_BIN}:$ENV{PATH}" make -j install
++  BUILD_COMMAND ${CMAKE_COMMAND} -E env "PATH=${NDK_TOOLCHAIN_BIN}:$ENV{PATH}" make -j${FREERDP_BUILD_JOBS}
++  INSTALL_COMMAND ${CMAKE_COMMAND} -E env "PATH=${NDK_TOOLCHAIN_BIN}:$ENV{PATH}" make -j${FREERDP_BUILD_JOBS} install
+ )
+--- a/client/Android/cmake/ExternalFreeRDP.cmake
++++ b/client/Android/cmake/ExternalFreeRDP.cmake
+@@ -39,9 +39,14 @@
+     # JSON
+     -DWITH_CJSON_REQUIRED:BOOL=${WITH_CJSON}
+     # Printer channel
+-    -DCHANNEL_PRINTER_CLIENT:BOOL=ON
++    -DCHANNEL_PRINTER_CLIENT:BOOL=OFF
+     # Camera redirection (Android NDK Camera2 HAL)
+-    -DCHANNEL_RDPECAM_CLIENT:BOOL=ON
++    -DCHANNEL_RDPECAM_CLIENT:BOOL=OFF
++    -DWITH_AAUDIO:BOOL=OFF
++    -DWITH_OPENSLES:BOOL=ON
++    -DWITH_FUSE:BOOL=OFF
++    -DWITH_JSON_DISABLED:BOOL=ON
++    -DWITH_AAD:BOOL=OFF
+     -DWITH_VERBOSE_WINPR_ASSERT:BOOL=OFF
+ )
+ 

@@ -1,22 +1,14 @@
 package com.undatech.opaque;
 
-import android.util.Log;
-
 import com.freerdp.freerdpcore.application.GlobalApp;
-import com.freerdp.freerdpcore.application.SessionState;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 
-import java.lang.reflect.Field;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Routes process-wide FreeRDP connection events to their owning session. */
 final class RdpSessionRegistry implements LibFreeRDP.EventListener {
-    private static final String TAG = "RdpSessionRegistry";
-
     private final Map<Long, LibFreeRDP.EventListener> listeners = new ConcurrentHashMap<>();
     private final Set<Long> activeInstances = ConcurrentHashMap.newKeySet();
     private final SessionReleaser sessionReleaser;
@@ -35,7 +27,6 @@ final class RdpSessionRegistry implements LibFreeRDP.EventListener {
             return;
         }
 
-        initializeGlobalSessionMap();
         LibFreeRDP.setEventListener(this);
         installed = true;
     }
@@ -60,19 +51,6 @@ final class RdpSessionRegistry implements LibFreeRDP.EventListener {
 
     int size() {
         return listeners.size();
-    }
-
-    private void initializeGlobalSessionMap() {
-        try {
-            Field sessionMap = GlobalApp.class.getDeclaredField("sessionMap");
-            sessionMap.setAccessible(true);
-            if (sessionMap.get(null) == null) {
-                Log.i(TAG, "Initializing FreeRDP session map");
-                sessionMap.set(null, Collections.synchronizedMap(new HashMap<Long, SessionState>()));
-            }
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new IllegalStateException("Unable to initialize the FreeRDP session map", e);
-        }
     }
 
     private static void releaseSession(long instance) {

@@ -1,5 +1,35 @@
 # Quest 3 dependency update progress
 
+## FreeRDP / WinPR 3.33.0
+
+The stack uses verified FreeRDP 3.33.0 source and Android CMake ExternalDeps,
+OpenSSL 3.5.9 and intermediate FFmpeg 4.4.1. FFmpeg 9 is the next separate
+update; this combination is not the final release target. The slim embedded
+module excludes upstream Room, bookmark persistence and standalone UI. The
+[patch replacement map](FREERDP_3_PATCH_MAP.md) accounts for all 27 old patches.
+Native CMake is 3.28.3 (ExternalDeps needs >=3.24), with existing NDK r25c,
+API 23 and explicit 16 KB linker alignment.
+
+Clean ARM64 build, all application release builds, runtime graph and all 61
+local tests pass. Logs: `/tmp/quest-freerdp3-native-pass.log`,
+`/tmp/quest-freerdp3-apps.log` and `/tmp/quest-freerdp3-unit.log`. New tests cover
+eight certificate-pin cases and four bounded capability-probe cases. Static
+inspection verifies 23 native methods and 25 callback sites against compiled
+Java descriptors and native exports. The APK contains real `libfreerdp3`,
+`libfreerdp-client3` and `libwinpr3`, with no 2.x counterparts. All 17 ARM64
+libraries' DT_NEEDED entries resolve within the APK or Android system libraries.
+Native configuration confirms MediaCodec, FFmpeg and OpenSL on, with
+OpenH264/AAudio/direct UDP off; the buffered 150 ms marker is present.
+Unchanged recipe/artifact checks skip rebuilding correctly.
+
+APK ZIP alignment passes and new RDP libraries have 16 KB ELF LOAD alignment.
+Three unchanged prebuilt inputs remain at 4 KB: `libc++_shared.so`,
+`libgstreamer_android.so` and `libspice.so`; complete 16 KB device compatibility
+is not claimed. App ID, version and target SDK remain unchanged. Physical Quest
+connection, graphics, certificate/NLA, audio, independent/multi-monitor sessions
+and sustained-use acceptance remain pending. Host-only old certificate pins
+require renewed confirmation because their format does not bind a port.
+
 ## Android UI and lifecycle
 
 The shared UI dependency declarations target Core/KTX 1.19.1, AppCompat 1.8.0, Material 1.14.0, Activity/KTX 1.13.0, Fragment/KTX 1.9.1, Lifecycle modules in the existing graph 2.11.0, Preference/KTX 1.2.1 and VectorDrawable 1.2.0. Transitive modules are aligned with constraints, not forced. Core KTX remains declared until the resulting graph and compilation are verified. The Core and Core KTX 1.19.1 AAR metadata requires compile SDK 37, so the shared compile SDK is now 37; target SDK remains 36 and minimum SDK remains 23. [Material 1.14.0 release notes](https://github.com/material-components/material-components-android/releases/tag/1.14.0) specify minimum SDK 23 and a library compile SDK of 35. No application lifecycle change is made. The aRDP CI workflow derives the platform from the shared compile SDK and uses `platforms;android-37.0`, the package identifier recorded by the installed SDK.

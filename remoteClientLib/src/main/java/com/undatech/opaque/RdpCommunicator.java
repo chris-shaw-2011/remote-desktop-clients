@@ -10,7 +10,6 @@ import android.util.Log;
 import com.freerdp.freerdpcore.application.GlobalApp;
 import com.freerdp.freerdpcore.application.SessionState;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 import com.undatech.opaque.input.RdpKeyboardMapper;
 import com.undatech.opaque.input.RemoteKeyboard;
@@ -19,6 +18,7 @@ import com.undatech.opaque.util.GeneralUtils;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -61,6 +61,7 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     // security certificate. Used to control progress while the dialog asking the user
     // to confirm the authenticity of a certificate is displayed.
     private boolean certificateAccepted = false;
+    private boolean certificateDecisionReceived = false;
     private boolean reattemptWithoutCredentials = true;
     private boolean authenticationAttempted = false;
     private boolean gatewayAuthenticationAttempted = false;
@@ -99,7 +100,7 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         this.connection = connection;
         SESSION_REGISTRY.install();
         // Create a manual bookmark and populate it from settings.
-        this.bookmark = new ManualBookmark();
+        this.bookmark = new BookmarkBase();
         this.context = context.getApplicationContext();
         this.monitorGroupId = monitorGroupId;
         this.monitorCount = monitorCount;
@@ -259,7 +260,7 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
 
     @Override
     public String desktopName() {
-        return ((ManualBookmark) session.getBookmark()).getHostname();
+        return session.getBookmark().getHostname();
     }
 
     @Override
@@ -337,6 +338,7 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         }
         setIsInNormalProtocol(false);
         disconnectRequested = true;
+        notifyAll();
         long instance = session.getInstance();
         inputExecutor.shutdown();
         DisconnectThread d = new DisconnectThread(instance, inputExecutor);
@@ -366,13 +368,15 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     }
 
     @Override
-    public boolean isCertificateAccepted() {
+    public synchronized boolean isCertificateAccepted() {
         return certificateAccepted;
     }
 
     @Override
-    public void setCertificateAccepted(boolean certificateAccepted) {
+    public synchronized void setCertificateAccepted(boolean certificateAccepted) {
         this.certificateAccepted = certificateAccepted;
+        certificateDecisionReceived = true;
+        notifyAll();
     }
 
     private void sendModifierKeys(boolean down) {
@@ -570,12 +574,12 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         // Set a writable data directory
         //LibFreeRDP.setDataDirectory(session.getInstance(), getContext().getFilesDir().toString());
         // Get the address and port (based on whether an SSH tunnel is being established or not).
-        bookmark.<ManualBookmark>get().setLabel(nickname);
-        bookmark.<ManualBookmark>get().setHostname(addBracketsToIpv6Address(address));
-        bookmark.<ManualBookmark>get().setPort(rdpPort);
+        bookmark.setLabel(nickname);
+        bookmark.setHostname(addBracketsToIpv6Address(address));
+        bookmark.setPort(rdpPort);
 
-        bookmark.<ManualBookmark>get().setEnableGatewaySettings(gatewayEnabled);
-        ManualBookmark.GatewaySettings gatewaySettings = bookmark.<ManualBookmark>get().getGatewaySettings();
+        bookmark.setEnableGatewaySettings(gatewayEnabled);
+        BookmarkBase.GatewaySettings gatewaySettings = bookmark.getGatewaySettings();
         gatewaySettings.setUsername(gatewayUsername);
         gatewaySettings.setDomain(gatewayDomain);
         gatewaySettings.setPassword(gatewayPassword);
@@ -789,11 +793,17 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         password.append(fromPassword);
     }
 
-    @Override
-    public int OnVerifiyCertificate(String commonName, String subject,
+    private int promptCertificate(String commonName, String subject,
                                     String issuer, String fingerprint, boolean mismatch) {
         Log.d(TAG, "OnVerifiyCertificate called.");
 
+        synchronized (this) {
+            if (disconnectRequested) {
+                return 0;
+            }
+            certificateAccepted = false;
+            certificateDecisionReceived = false;
+        }
         // Send a message containing the certificate to our handler.
         Message m = new Message();
         Handler activeHandler = getActiveHandler();
@@ -804,21 +814,22 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         strings.putString("issuer", issuer);
         strings.putString("fingerprint", fingerprint);
         m.obj = strings;
-        activeHandler.sendMessage(m);
+        if (!activeHandler.sendMessage(m)) {
+            return 0;
+        }
 
         // Block while user decides whether to accept certificate or not.
-        // The activity ends if the user taps "No", so we block indefinitely here.
         synchronized (this) {
-            while (!certificateAccepted) {
+            while (!certificateDecisionReceived && !disconnectRequested) {
                 try {
                     this.wait();
                 } catch (InterruptedException e) {
-                    Log.e(TAG, "InterruptedException: " + Log.getStackTraceString(e));
+                    Thread.currentThread().interrupt();
+                    return 0;
                 }
             }
+            return certificateAccepted && !disconnectRequested ? 1 : 0;
         }
-
-        return 1;
     }
 
     @Override
@@ -833,11 +844,31 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
     }
 
     @Override
-    public int OnVerifyChangedCertificate(String commonName, String subject,
-                                          String issuer, String fingerprint, String oldSubject,
-                                          String oldIssuer, String oldFingerprint) {
-        Log.d(TAG, "OnVerifyChangedCertificate called.");
-        return this.OnVerifiyCertificate(commonName, subject, issuer, fingerprint, true);
+    public int OnVerifiyCertificateEx(String host, long port, String commonName, String subject,
+                                     String issuer, String fingerprint, long flags) {
+        boolean pem = (flags & LibFreeRDP.VERIFY_CERT_FLAG_FP_IS_PEM) != 0;
+        String displayFingerprint = RdpCertificateTrust.displayFingerprint(fingerprint, pem);
+        if (displayFingerprint == null) return 0;
+        // The old host-only known_hosts format cannot prove the port; leave it for user review.
+        File knownHosts = new File(context.getFilesDir(), ".config/freerdp/known_hosts2");
+        if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_CHANGED) == 0 &&
+                RdpCertificateTrust.matchesKnownHosts(knownHosts, host, port, fingerprint, pem)) {
+            synchronized (this) {
+                return disconnectRequested ? 0 : 1;
+            }
+        }
+        return promptCertificate(commonName, subject, issuer, displayFingerprint,
+                (flags & LibFreeRDP.VERIFY_CERT_FLAG_MISMATCH) != 0);
+    }
+
+    @Override
+    public int OnVerifyChangedCertificateEx(String host, long port, String commonName, String subject,
+                                           String issuer, String fingerprint, String oldSubject,
+                                           String oldIssuer, String oldFingerprint, long flags) {
+        String displayFingerprint = RdpCertificateTrust.displayFingerprint(fingerprint,
+                (flags & LibFreeRDP.VERIFY_CERT_FLAG_FP_IS_PEM) != 0);
+        if (displayFingerprint == null) return 0;
+        return promptCertificate(commonName, subject, issuer, displayFingerprint, true);
     }
 
     @Override

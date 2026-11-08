@@ -145,6 +145,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Android ExternalDeps uses CMake >= 3.24 and Ninja.
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config make perl
           ./download-prebuilt-dependencies.sh
           (
             cd remoteClientLib/jni/libs
@@ -157,19 +160,19 @@ jobs:
 
           freerdp_root="remoteClientLib/jni/libs/deps/FreeRDP"
           bookmark="$freerdp_root/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/domain/BookmarkBase.java"
-          libfreerdp_client="$freerdp_root/client/Android/Studio/freeRDPCore/src/main/jniLibs/arm64-v8a/libfreerdp-client2.so"
+          libfreerdp_client="$freerdp_root/client/Android/Studio/freeRDPCore/src/main/jniLibs/arm64-v8a/libfreerdp-client3.so"
           libfreerdp_android="$freerdp_root/client/Android/Studio/freeRDPCore/src/main/jniLibs/arm64-v8a/libfreerdp-android.so"
           if [[ ! -f "$bookmark" || ! -d "$freerdp_root/client/Android/Studio/freeRDPCore/src/main/jniLibs/arm64-v8a" ]]; then
             echo "::error::The patched FreeRDP dependency was not built correctly"
             exit 1
           fi
 
-          grep -Fq 'void setGlyphCache(boolean glyphCache)' "$bookmark"
-          grep -Fq 'args.add("/sound:latency:150")' \
+          grep -Fq 'void setGlyphCache(boolean ' "$bookmark"
+          grep -Fq '/sound:sys:opensles,latency:150' \
             "$freerdp_root/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java"
           grep -Fq 'freerdp_set_monitor_layout' \
             "$freerdp_root/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java"
-          grep -Faq 'freerdp_update_graphics_region' "$libfreerdp_android"
+          grep -Faq 'Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1update_1graphics_1region' "$libfreerdp_android"
           grep -Faq 'Starting buffered OpenSL playback with %d ms prebuffer' "$libfreerdp_client"
 
       - name: Build aRDP release APKs

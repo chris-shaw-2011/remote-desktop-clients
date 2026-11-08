@@ -1,0 +1,22 @@
+--- a/libfreerdp/codec/h264_mediacodec.c
++++ b/libfreerdp/codec/h264_mediacodec.c
+@@ -40,6 +40,10 @@
+ 
+ static const char* CODEC_NAME = "video/avc";
+ 
++/* AMEDIACODEC_BUFFER_FLAG_KEY_FRAME is exposed only by newer NDK headers.
++ * MediaCodec has always reported key/sync frames using buffer flag bit 0. */
++static const uint32_t MEDIACODEC_BUFFER_FLAG_KEY_FRAME = 1u;
++
+ static const int COLOR_FormatYUV420Planar = 19;
+ static const int COLOR_FormatYUV420SemiPlanar = 21; /* NV12, widest encoder support */
+ static const int COLOR_FormatYUV420Flexible = 0x7f420888;
+@@ -860,7 +864,7 @@
+ 				continue;
+ 			}
+ 
+-			const BOOL isKeyFrame = (info.flags & AMEDIACODEC_BUFFER_FLAG_KEY_FRAME) != 0;
++			const BOOL isKeyFrame = (info.flags & MEDIACODEC_BUFFER_FLAG_KEY_FRAME) != 0;
+ 			const BOOL prependSps = isKeyFrame && sys->spsPpsData && sys->spsPpsSize > 0 &&
+ 			                        !mediacodec_has_sps(outBuffer + info.offset, (size_t)info.size);
+ 			const size_t totalSize = (size_t)info.size + (prependSps ? sys->spsPpsSize : 0);

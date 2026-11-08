@@ -1,0 +1,229 @@
+--- a/client/Android/Studio/freeRDPCore/src/main/cpp/android_freerdp.c
++++ b/client/Android/Studio/freeRDPCore/src/main/cpp/android_freerdp.c
+@@ -967,6 +967,44 @@
+ 	return (status == 0) ? JNI_TRUE : JNI_FALSE;
+ }
+ 
++/* Configure one shared desktop before connecting. Each Quest panel copies its monitor region. */
++JNIEXPORT jboolean JNICALL
++Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1set_1monitor_1layout(
++    JNIEnv* env, jclass cls, jlong instance, jint count, jint width, jint height)
++{
++	freerdp* inst = (freerdp*)instance;
++	rdpMonitor monitors[16] = WINPR_C_ARRAY_INIT;
++
++	if (!env || !cls || !inst || !inst->context || !inst->context->settings || count < 1 ||
++	    count > 16 || width <= 0 || height <= 0 || ((INT64)count * width) > 32766 ||
++	    height > 32766)
++		return JNI_FALSE;
++
++	for (jint i = 0; i < count; i++)
++	{
++		rdpMonitor* monitor = &monitors[i];
++		monitor->x = i * width;
++		monitor->width = width;
++		monitor->height = height;
++		monitor->is_primary = (i == 0);
++		monitor->orig_screen = (UINT32)i;
++		monitor->attributes.desktopScaleFactor = 100;
++		monitor->attributes.deviceScaleFactor = 100;
++	}
++
++	rdpSettings* settings = inst->context->settings;
++	if (!freerdp_settings_set_monitor_def_array_sorted(settings, monitors, (size_t)count) ||
++	    !freerdp_settings_set_bool(settings, FreeRDP_UseMultimon, count > 1) ||
++	    !freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, (UINT32)(count * width)) ||
++	    !freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, (UINT32)height))
++		return JNI_FALSE;
++
++	if ((count > 1) && !freerdp_settings_set_bool(settings, FreeRDP_Fullscreen, TRUE))
++		return JNI_FALSE;
++
++	return JNI_TRUE;
++}
++
+ JNIEXPORT jboolean JNICALL Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1connect(
+     JNIEnv* env, jclass cls, jlong instance)
+ {
+@@ -1025,29 +1063,30 @@
+ 	return JNI_TRUE;
+ }
+ 
+-JNIEXPORT jboolean JNICALL
+-Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1update_1graphics(JNIEnv* env, jclass cls,
+-                                                                           jlong instance,
+-                                                                           jobject bitmap, jint x,
+-                                                                           jint y, jint width,
+-                                                                           jint height)
++static jboolean android_update_graphics_region(JNIEnv* env, jclass cls, jlong instance,
++                                                jobject bitmap, jint sourceX, jint sourceY,
++                                                jint destinationX, jint destinationY, jint width,
++                                                jint height)
+ {
+ 	UINT32 DstFormat;
+-	jboolean rc;
+ 	int ret;
+-	void* pixels;
+-	AndroidBitmapInfo info;
++	void* pixels = nullptr;
++	AndroidBitmapInfo info = WINPR_C_ARRAY_INIT;
+ 	freerdp* inst = (freerdp*)instance;
+-	rdpGdi* gdi;
++	INT64 sx = sourceX;
++	INT64 sy = sourceY;
++	INT64 dx = destinationX;
++	INT64 dy = destinationY;
++	INT64 w = width;
++	INT64 h = height;
+ 
+-	if (!env || !cls || !inst)
+-	{
+-		WLog_FATAL(TAG, "(env=%p, cls=%p, instance=%" PRId64, (void*)env, (void*)cls,
+-		           (int64_t)instance);
++	if (!env || !cls || !inst || !inst->context || !inst->context->gdi || !bitmap ||
++	    width <= 0 || height <= 0)
+ 		return JNI_FALSE;
+-	}
+ 
+-	gdi = inst->context->gdi;
++	rdpGdi* gdi = inst->context->gdi;
++	if (!gdi->primary_buffer || gdi->width <= 0 || gdi->height <= 0)
++		return JNI_FALSE;
+ 
+ 	if ((ret = AndroidBitmap_getInfo(env, bitmap, &info)) < 0)
+ 	{
+@@ -1055,14 +1094,6 @@
+ 		return JNI_FALSE;
+ 	}
+ 
+-	if ((ret = AndroidBitmap_lockPixels(env, bitmap, &pixels)) < 0)
+-	{
+-		WLog_FATAL(TAG, "AndroidBitmap_lockPixels() failed ! error=%d", ret);
+-		return JNI_FALSE;
+-	}
+-
+-	rc = JNI_TRUE;
+-
+ 	switch (info.format)
+ 	{
+ 		case ANDROID_BITMAP_FORMAT_RGBA_8888:
+@@ -1073,41 +1104,92 @@
+ 			DstFormat = PIXEL_FORMAT_RGB16;
+ 			break;
+ 
+-		case ANDROID_BITMAP_FORMAT_RGBA_4444:
+-		case ANDROID_BITMAP_FORMAT_A_8:
+-		case ANDROID_BITMAP_FORMAT_NONE:
+ 		default:
+-			rc = JNI_FALSE;
+-			break;
++			return JNI_FALSE;
++	}
++
++	/* Clip both rectangles together, preserving the source-to-destination translation.
++	 * Wide intermediates also handle Java coordinates near INT_MIN/INT_MAX safely. */
++	if (sx < 0)
++	{
++		dx -= sx;
++		w += sx;
++		sx = 0;
++	}
++	if (sy < 0)
++	{
++		dy -= sy;
++		h += sy;
++		sy = 0;
++	}
++	if (dx < 0)
++	{
++		sx -= dx;
++		w += dx;
++		dx = 0;
++	}
++	if (dy < 0)
++	{
++		sy -= dy;
++		h += dy;
++		dy = 0;
+ 	}
++	w = MIN(w, (INT64)gdi->width - sx);
++	w = MIN(w, (INT64)info.width - dx);
++	h = MIN(h, (INT64)gdi->height - sy);
++	h = MIN(h, (INT64)info.height - dy);
++	if (w <= 0 || h <= 0)
++		return JNI_TRUE;
+ 
+-	if (rc)
++	if ((ret = AndroidBitmap_lockPixels(env, bitmap, &pixels)) < 0)
+ 	{
+-		rc = freerdp_image_copy(pixels, DstFormat, info.stride, x, y, width, height,
+-		                        gdi->primary_buffer, gdi->dstFormat, gdi->stride, x, y,
+-		                        &gdi->palette, FREERDP_FLIP_NONE);
++		WLog_FATAL(TAG, "AndroidBitmap_lockPixels() failed ! error=%d", ret);
++		return JNI_FALSE;
+ 	}
+ 
++	const BOOL copied = freerdp_image_copy(
++	    pixels, DstFormat, info.stride, (UINT32)dx, (UINT32)dy, (UINT32)w, (UINT32)h,
++	    gdi->primary_buffer, gdi->dstFormat, gdi->stride, (UINT32)sx, (UINT32)sy, &gdi->palette,
++	    FREERDP_FLIP_NONE);
++
+ 	if ((ret = AndroidBitmap_unlockPixels(env, bitmap)) < 0)
+ 	{
+ 		WLog_FATAL(TAG, "AndroidBitmap_unlockPixels() failed ! error=%d", ret);
+ 		return JNI_FALSE;
+ 	}
+ 
+-	return rc;
++	return copied ? JNI_TRUE : JNI_FALSE;
++}
++
++JNIEXPORT jboolean JNICALL
++Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1update_1graphics_1region(
++    JNIEnv* env, jclass cls, jlong instance, jobject bitmap, jint sourceX, jint sourceY,
++    jint destinationX, jint destinationY, jint width, jint height)
++{
++	return android_update_graphics_region(env, cls, instance, bitmap, sourceX, sourceY,
++	                                      destinationX, destinationY, width, height);
++}
++
++JNIEXPORT jboolean JNICALL
++Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1update_1graphics(
++    JNIEnv* env, jclass cls, jlong instance, jobject bitmap, jint x, jint y, jint width,
++    jint height)
++{
++	return android_update_graphics_region(env, cls, instance, bitmap, x, y, x, y, width, height);
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+ Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1send_1key_1event(JNIEnv* env, jclass cls,
+                                                                            jlong instance,
+                                                                            jint keycode,
+-                                                                           jboolean down)
++                                                                           jboolean down, jboolean repeat)
+ {
+ 	DWORD scancode;
+ 	ANDROID_EVENT* event;
+ 	freerdp* inst = (freerdp*)instance;
+ 	scancode = GetVirtualScanCodeFromVirtualKeyCode(keycode, 4);
+-	int flags = (down == JNI_TRUE) ? KBD_FLAGS_DOWN : KBD_FLAGS_RELEASE;
++	int flags = (down == JNI_TRUE) ? ((repeat == JNI_TRUE) ? KBD_FLAGS_DOWN : 0)
++	                                     : KBD_FLAGS_RELEASE;
+ 	flags |= (scancode & KBDEXT) ? KBD_FLAGS_EXTENDED : 0;
+ 	event = (ANDROID_EVENT*)android_event_key_new(flags, scancode & 0xFF);
+ 
+@@ -1126,11 +1208,12 @@
+ 
+ JNIEXPORT jboolean JNICALL
+ Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1send_1unicodekey_1event(
+-    JNIEnv* env, jclass cls, jlong instance, jint keycode, jboolean down)
++    JNIEnv* env, jclass cls, jlong instance, jint keycode, jboolean down, jboolean repeat)
+ {
+ 	ANDROID_EVENT* event;
+ 	freerdp* inst = (freerdp*)instance;
+-	UINT16 flags = (down == JNI_TRUE) ? 0 : KBD_FLAGS_RELEASE;
++	UINT16 flags = (down == JNI_TRUE) ? ((repeat == JNI_TRUE) ? KBD_FLAGS_DOWN : 0)
++	                                        : KBD_FLAGS_RELEASE;
+ 	event = (ANDROID_EVENT*)android_event_unicodekey_new(flags, keycode);
+ 
+ 	if (!event)

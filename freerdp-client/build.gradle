@@ -1,0 +1,42 @@
+apply plugin: 'com.android.library'
+
+// Compile the protocol wrapper only; the native build stages its shared libraries separately.
+def upstreamCore = file('../remoteClientLib/jni/libs/deps/FreeRDP/client/Android/Studio/freeRDPCore/src/main')
+def generatedJava = layout.buildDirectory.dir('generated/upstreamJava')
+def generatedResources = layout.buildDirectory.dir('generated/upstreamResources')
+def prepareUpstreamJava = tasks.register('prepareUpstreamJava', Sync) {
+    from("${upstreamCore}/java") {
+        include 'com/freerdp/freerdpcore/domain/BookmarkBase.java'
+        include 'com/freerdp/freerdpcore/application/SessionState.java'
+        include 'com/freerdp/freerdpcore/services/LibFreeRDP.java'
+    }
+    into generatedJava
+}
+// The app's existing layouts also reference the upstream translated string names.
+def prepareUpstreamResources = tasks.register('prepareUpstreamResources', Sync) {
+    from("${upstreamCore}/res") { include 'values*/strings.xml' }
+    into generatedResources
+}
+android {
+    namespace 'com.freerdp.freerdpcore'
+    compileSdkVersion compileApi
+    defaultConfig {
+        minSdkVersion project.getProperties().get('SDK_VERSION')
+        targetSdkVersion targetApi
+    }
+    sourceSets.main {
+        java.srcDirs = ['src/main/java', generatedJava]
+        res.srcDirs = ['src/main/res', generatedResources]
+        jniLibs.srcDirs = ["${upstreamCore}/jniLibs"]
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+tasks.named('preBuild').configure { dependsOn prepareUpstreamJava, prepareUpstreamResources }
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.8.0'
+    implementation 'androidx.core:core:1.19.1'
+    testImplementation 'junit:junit:4.13.2'
+}

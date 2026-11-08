@@ -1,0 +1,540 @@
+--- a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/domain/BookmarkBase.java
++++ b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/domain/BookmarkBase.java
+@@ -89,6 +89,11 @@
+ 			    return new BookmarkBase[size];
+ 		    }
+ 	    };
++	private String rdpFileName;
++
++	public String getRdpFileName() { return rdpFileName; }
++	public void setRdpFileName(String name) { rdpFileName = name; }
++
+ 	protected int type = TYPE_MANUAL;
+ 	private long id = -1;
+ 
+@@ -138,6 +143,7 @@
+ 		gatewaySettings =
+ 		    Objects.requireNonNull(parcel.readParcelable(GatewaySettings.class.getClassLoader()));
+ 		directConnect = (parcel.readInt() == 1);
++		rdpFileName = parcel.readString();
+ 	}
+ 
+ 	public BookmarkBase()
+@@ -299,9 +305,10 @@
+ 		out.writeParcelable(debugSettings, flags);
+ 		out.writeString(hostname);
+ 		out.writeInt(port);
+-		out.writeBoolean(enableGatewaySettings);
++		out.writeInt(enableGatewaySettings ? 1 : 0);
+ 		out.writeParcelable(gatewaySettings, flags);
+-		out.writeBoolean(directConnect);
++		out.writeInt(directConnect ? 1 : 0);
++		out.writeString(rdpFileName);
+ 	}
+ 
+ 	// write to shared preferences
+@@ -447,6 +454,9 @@
+ 		private boolean remotefx = true;
+ 		private boolean gfx = true;
+ 		private boolean h264 = true;
++		private boolean glyphCache = true;
++		public boolean isGlyphCache() { return glyphCache; }
++		public void setGlyphCache(boolean enabled) { glyphCache = enabled; }
+ 		private boolean wallpaper = true;
+ 		private boolean theming = true;
+ 		private boolean fullWindowDrag = true;
+@@ -460,15 +470,16 @@
+ 
+ 		public PerformanceFlags(Parcel parcel)
+ 		{
+-			remotefx = parcel.readBoolean();
+-			gfx = parcel.readBoolean();
+-			h264 = parcel.readBoolean();
+-			wallpaper = parcel.readBoolean();
+-			theming = parcel.readBoolean();
+-			fullWindowDrag = parcel.readBoolean();
+-			menuAnimations = parcel.readBoolean();
+-			fontSmoothing = parcel.readBoolean();
+-			desktopComposition = parcel.readBoolean();
++			remotefx = (parcel.readInt() != 0);
++			gfx = (parcel.readInt() != 0);
++			h264 = (parcel.readInt() != 0);
++			wallpaper = (parcel.readInt() != 0);
++			theming = (parcel.readInt() != 0);
++			fullWindowDrag = (parcel.readInt() != 0);
++			menuAnimations = (parcel.readInt() != 0);
++			fontSmoothing = (parcel.readInt() != 0);
++			desktopComposition = (parcel.readInt() != 0);
++			glyphCache = (parcel.readInt() != 0);
+ 		}
+ 
+ 		public boolean getRemoteFX()
+@@ -568,15 +579,16 @@
+ 
+ 		@Override public void writeToParcel(@NonNull Parcel out, int flags)
+ 		{
+-			out.writeBoolean(remotefx);
+-			out.writeBoolean(gfx);
+-			out.writeBoolean(h264);
+-			out.writeBoolean(wallpaper);
+-			out.writeBoolean(theming);
+-			out.writeBoolean(fullWindowDrag);
+-			out.writeBoolean(menuAnimations);
+-			out.writeBoolean(fontSmoothing);
+-			out.writeBoolean(desktopComposition);
++			out.writeInt(remotefx ? 1 : 0);
++			out.writeInt(gfx ? 1 : 0);
++			out.writeInt(h264 ? 1 : 0);
++			out.writeInt(wallpaper ? 1 : 0);
++			out.writeInt(theming ? 1 : 0);
++			out.writeInt(fullWindowDrag ? 1 : 0);
++			out.writeInt(menuAnimations ? 1 : 0);
++			out.writeInt(fontSmoothing ? 1 : 0);
++			out.writeInt(desktopComposition ? 1 : 0);
++			out.writeInt(glyphCache ? 1 : 0);
+ 		}
+ 	}
+ 
+@@ -606,6 +618,15 @@
+ 		private String scaleMode = "100";
+ 		private int scaleDesktop = 100;
+ 		private int scaleDevice = 100;
++		private int monitorCount = 1;
++		public int getMonitorCount() { return monitorCount; }
++		public void setMonitorCount(int count) { monitorCount = Math.max(1, Math.min(16, count)); }
++		public int getDesktopScalePercentage() { return scaleDesktop; }
++		public void setDesktopScalePercentage(int percentage) {
++			scaleDesktop = percentage >= 100 && percentage <= 500 ? percentage : 100;
++			scaleMode = "custom";
++			scaleDevice = 100;
++		}
+ 
+ 		public ScreenSettings()
+ 		{
+@@ -620,6 +641,7 @@
+ 			scaleMode = parcel.readString();
+ 			scaleDesktop = parcel.readInt();
+ 			scaleDevice = parcel.readInt();
++			setMonitorCount(parcel.readInt());
+ 		}
+ 
+ 		private void validate()
+@@ -818,6 +840,7 @@
+ 			out.writeString(scaleMode);
+ 			out.writeInt(scaleDesktop);
+ 			out.writeInt(scaleDevice);
++			out.writeInt(monitorCount);
+ 		}
+ 	}
+ 
+@@ -848,9 +871,9 @@
+ 		// Session Settings
+ 		public DebugSettings(@NonNull Parcel parcel)
+ 		{
+-			asyncChannel = parcel.readBoolean();
+-			asyncTransport = parcel.readBoolean();
+-			asyncUpdate = parcel.readBoolean();
++			asyncChannel = (parcel.readInt() != 0);
++			asyncTransport = (parcel.readInt() != 0);
++			asyncUpdate = (parcel.readInt() != 0);
+ 			debug = Objects.requireNonNull(parcel.readString());
+ 		}
+ 
+@@ -907,9 +930,9 @@
+ 
+ 		@Override public void writeToParcel(@NonNull Parcel out, int flags)
+ 		{
+-			out.writeBoolean(asyncChannel);
+-			out.writeBoolean(asyncTransport);
+-			out.writeBoolean(asyncUpdate);
++			out.writeInt(asyncChannel ? 1 : 0);
++			out.writeInt(asyncTransport ? 1 : 0);
++			out.writeInt(asyncUpdate ? 1 : 0);
+ 			out.writeString(debug);
+ 		}
+ 	}
+@@ -956,14 +979,14 @@
+ 		public AdvancedSettings(@NonNull Parcel parcel)
+ 		{
+ 			loadBalanceInfo = Objects.requireNonNull(parcel.readString());
+-			redirectSDCard = parcel.readBoolean();
++			redirectSDCard = (parcel.readInt() != 0);
+ 			redirectSound = parcel.readInt();
+-			redirectMicrophone = parcel.readBoolean();
+-			redirectCamera = parcel.readBoolean();
+-			redirectPrinter = parcel.readBoolean();
++			redirectMicrophone = (parcel.readInt() != 0);
++			redirectCamera = (parcel.readInt() != 0);
++			redirectPrinter = (parcel.readInt() != 0);
+ 			security = parcel.readInt();
+-			consoleMode = parcel.readBoolean();
+-			vmConnectMode = parcel.readBoolean();
++			consoleMode = (parcel.readInt() != 0);
++			vmConnectMode = (parcel.readInt() != 0);
+ 			vmConnectGuid = Objects.requireNonNull(parcel.readString());
+ 			remoteProgram = Objects.requireNonNull(parcel.readString());
+ 			alternateShell = Objects.requireNonNull(parcel.readString());
+@@ -1157,14 +1180,14 @@
+ 		@Override public void writeToParcel(@NonNull Parcel out, int flags)
+ 		{
+ 			out.writeString(loadBalanceInfo);
+-			out.writeBoolean(redirectSDCard);
++			out.writeInt(redirectSDCard ? 1 : 0);
+ 			out.writeInt(redirectSound);
+-			out.writeBoolean(redirectMicrophone);
+-			out.writeBoolean(redirectCamera);
+-			out.writeBoolean(redirectPrinter);
++			out.writeInt(redirectMicrophone ? 1 : 0);
++			out.writeInt(redirectCamera ? 1 : 0);
++			out.writeInt(redirectPrinter ? 1 : 0);
+ 			out.writeInt(security);
+-			out.writeBoolean(consoleMode);
+-			out.writeBoolean(vmConnectMode);
++			out.writeInt(consoleMode ? 1 : 0);
++			out.writeInt(vmConnectMode ? 1 : 0);
+ 			out.writeString(vmConnectGuid);
+ 			out.writeString(remoteProgram);
+ 			out.writeString(alternateShell);
+--- a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/application/SessionState.java
++++ b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/application/SessionState.java
+@@ -68,15 +68,15 @@
+ 
+ 	public void connect(Context context)
+ 	{
+-		if (bookmark != null)
+-		{
+-			LibFreeRDP.setConnectionInfo(context, instance, bookmark);
++		boolean configured = bookmark != null
++		    ? LibFreeRDP.setConnectionInfo(context, instance, bookmark)
++		    : LibFreeRDP.setConnectionInfo(context, instance, openUri);
++		if (!configured) {
++			LibFreeRDP.reportConnectionFailure(instance);
++			return;
+ 		}
+-		else
+-		{
+-			LibFreeRDP.setConnectionInfo(context, instance, openUri);
+-		}
+-		LibFreeRDP.connect(instance);
++		if (!LibFreeRDP.connect(instance))
++			LibFreeRDP.reportConnectionFailure(instance);
+ 	}
+ 
+ 	public long getInstance()
+--- a/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
++++ b/client/Android/Studio/freeRDPCore/src/main/java/com/freerdp/freerdpcore/services/LibFreeRDP.java
+@@ -20,8 +20,8 @@
+ import com.freerdp.freerdpcore.application.GlobalApp;
+ import com.freerdp.freerdpcore.application.SessionState;
+ import com.freerdp.freerdpcore.domain.BookmarkBase;
+-import com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity;
+-
++
++import java.io.File;
+ import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Objects;
+@@ -32,7 +32,8 @@
+ {
+ 	private static final String TAG = "LibFreeRDP";
+ 	private static EventListener listener;
+-	private static boolean mHasH264 = false;
++	private static final BoundedCapabilityProbe H264_PROBE =
++	    new BoundedCapabilityProbe(LibFreeRDP::freerdp_has_h264, 1000);
+ 	private static boolean mHasCameraRedirection = false;
+ 
+ 	private static final LongSparseArray<Boolean> mInstanceState = new LongSparseArray<>();
+@@ -102,19 +103,11 @@
+ 			int minor = Integer.parseInt(Objects.requireNonNull(matcher.group(2)));
+ 			int patch = Integer.parseInt(Objects.requireNonNull(matcher.group(3)));
+ 
+-			if (major > 2)
+-				mHasH264 = freerdp_has_h264();
+-			else if (minor > 5)
+-				mHasH264 = freerdp_has_h264();
+-			else if ((minor == 5) && (patch >= 1))
+-				mHasH264 = freerdp_has_h264();
+-			else
+-				throw new RuntimeException("APK broken: native library version " + version +
+-				                           " does not meet requirements!");
++			if (major != 3)
++				throw new RuntimeException("APK broken: expected FreeRDP 3, got " + version);
+ 			mHasCameraRedirection = freerdp_has_camera_redirection();
+-			Log.i(TAG, "Successfully loaded native library. H264 is " +
+-			               (mHasH264 ? "supported" : "not available") + ", camera redirection is " +
+-			               (mHasCameraRedirection ? "supported" : "not available"));
++			Log.i(TAG, "Successfully loaded native library. Camera redirection is " +
++			    (mHasCameraRedirection ? "supported" : "not available"));
+ 		}
+ 		catch (UnsatisfiedLinkError e)
+ 		{
+@@ -125,7 +118,7 @@
+ 
+ 	public static boolean hasH264Support()
+ 	{
+-		return mHasH264;
++		return H264_PROBE.get();
+ 	}
+ 
+ 	public static boolean hasCameraRedirectionSupport()
+@@ -160,12 +153,17 @@
+ 	private static native boolean freerdp_update_graphics(long inst, Bitmap bitmap, int x, int y,
+ 	                                                      int width, int height);
+ 
++	private static native boolean freerdp_update_graphics_region(long inst, Bitmap bitmap,
++	    int sourceX, int sourceY, int destinationX, int destinationY, int width, int height);
++
++	private static native boolean freerdp_set_monitor_layout(long inst, int count, int width, int height);
++
+ 	private static native boolean freerdp_send_cursor_event(long inst, int x, int y, int flags);
+ 
+-	private static native boolean freerdp_send_key_event(long inst, int keycode, boolean down);
++	private static native boolean freerdp_send_key_event(long inst, int keycode, boolean down, boolean repeat);
+ 
+ 	private static native boolean freerdp_send_unicodekey_event(long inst, int keycode,
+-	                                                            boolean down);
++	                                                            boolean down, boolean repeat);
+ 
+ 	private static native boolean freerdp_is_unicode_input_supported(long inst);
+ 
+@@ -264,9 +262,12 @@
+ 		ArrayList<String> args = new ArrayList<>();
+ 
+ 		args.add(TAG);
++		if (bookmark.getRdpFileName() != null && !bookmark.getRdpFileName().isEmpty()) {
++			args.add(bookmark.getRdpFileName());
++		}
+ 		args.add("/gdi:sw");
+ 
+-		final String clientName = ApplicationSettingsActivity.getClientName(context);
++		final String clientName = android.os.Build.MODEL;
+ 		if (!clientName.isEmpty())
+ 		{
+ 			args.add("/client-hostname:" + clientName);
+@@ -280,8 +281,8 @@
+ 		int port = bookmark.getPort();
+ 		String hostname = bookmark.getHostname();
+ 
+-		args.add("/v:" + hostname);
+-		args.add("/port:" + port);
++		if (!hostname.isEmpty()) args.add("/v:" + hostname);
++		if (port > 0) args.add("/port:" + port);
+ 
+ 		final int level = advanced.getTlsSecLevel();
+ 		List<String> tls = new ArrayList<>();
+@@ -329,6 +330,8 @@
+ 
+ 		args.add(String.format(java.util.Locale.US, "/size:%dx%d", screenSettings.getWidth(),
+ 		                       screenSettings.getHeight()));
++		if (screenSettings.getMonitorCount() > 1) args.add("/multimon");
++		else if (screenSettings.isAutomatic()) args.add("/dynamic-resolution");
+ 		args.add("/bpp:" + screenSettings.getColors());
+ 
+ 		if (screenSettings.isCustomScale())
+@@ -358,7 +361,7 @@
+ 		switch (advanced.getSecurity())
+ 		{
+ 			case 3: // NLA
+-				args.add("/sec:nla");
++				args.add("/sec:nla:on,ext:on,tls:off,rdp:off,aad:off");
+ 				break;
+ 			case 2: // TLS
+ 				args.add("/sec:tls");
+@@ -378,20 +381,21 @@
+ 		args.add("/network:auto");
+ 
+ 		BookmarkBase.PerformanceFlags flags = bookmark.getActivePerformanceFlags();
++		final boolean hasH264 = flags.getH264() && hasH264Support();
+ 		if (flags.getRemoteFX())
+ 		{
+ 			args.add("/rfx");
+ 		}
+ 
+-		if (flags.getGfx())
+-		{
+-			if (flags.getH264() && mHasH264)
++		if (flags.getGfx() || (flags.getH264() && hasH264))
++		{
++			if (flags.getH264() && hasH264)
+ 			{
+ 				args.add("/gfx:AVC444,AVC420,RFX,progressive");
+ 			}
+ 			else
+ 			{
+-				args.add("/gfx");
++				args.add(flags.getRemoteFX() ? "/gfx:RFX,progressive" : "/gfx:progressive");
+ 			}
+ 		}
+ 
+@@ -401,6 +405,8 @@
+ 		args.add(addFlag("themes", flags.getTheming()));
+ 		args.add(addFlag("fonts", flags.getFontSmoothing()));
+ 		args.add(addFlag("aero", flags.getDesktopComposition()));
++		args.add("/cache:glyph:" + (flags.isGlyphCache() ? "on" : "off"));
++		args.add("+relax-order-checks");
+ 
+ 		if (!advanced.getRemoteProgram().isEmpty())
+ 		{
+@@ -421,8 +427,8 @@
+ 
+ 		if (advanced.getRedirectSDCard())
+ 		{
+-			String path = android.os.Environment.getExternalStorageDirectory().getPath();
+-			args.add("/drive:sdcard," + path);
++			File directory = context.getExternalFilesDir(null);
++			if (directory != null) args.add("/drive:sdcard," + directory.getPath());
+ 		}
+ 
+ 		String info = advanced.getLoadBalanceInfo();
+@@ -469,7 +475,7 @@
+ 		args.add("/audio-mode:" + advanced.getRedirectSound());
+ 		if (advanced.getRedirectSound() == 0)
+ 		{
+-			args.add("/sound");
++			args.add("/sound:sys:opensles,latency:150");
+ 		}
+ 
+ 		if (advanced.getRedirectMicrophone())
+@@ -482,16 +488,12 @@
+ 			args.add("/dvc:rdpecam");
+ 		}
+ 
+-		if (ApplicationSettingsActivity.getAutoReconnect(context))
+-		{
+-			args.add("/auto-reconnect");
+-		}
+-
+-		args.add("/kbd:unicode:on");
+-		args.add("/cert:ignore");
++
+ 		args.add("/log-level:" + debug.getDebugLevel());
+ 		String[] arrayArgs = args.toArray(new String[0]);
+-		return freerdp_parse_arguments(inst, arrayArgs);
++		if (!freerdp_parse_arguments(inst, arrayArgs)) return false;
++		return screenSettings.getMonitorCount() == 1 || freerdp_set_monitor_layout(inst,
++		    screenSettings.getMonitorCount(), screenSettings.getWidth(), screenSettings.getHeight());
+ 	}
+ 
+ 	public static boolean setConnectionInfo(Context context, long inst, Uri openUri)
+@@ -505,7 +507,7 @@
+ 		args.add(TAG);
+ 		args.add("/gdi:sw");
+ 
+-		final String clientName = ApplicationSettingsActivity.getClientName(context);
++		final String clientName = android.os.Build.MODEL;
+ 		if (!clientName.isEmpty())
+ 		{
+ 			args.add("/client-hostname:" + clientName);
+@@ -549,8 +551,9 @@
+ 				if (key.equals("drive") && value.equals("sdcard"))
+ 				{
+ 					// Special for sdcard redirect
+-					String path = android.os.Environment.getExternalStorageDirectory().getPath();
+-					value = "sdcard," + path;
++					File directory = context.getExternalFilesDir(null);
++					if (directory == null) return false;
++					value = "sdcard," + directory.getPath();
+ 				}
+ 
+ 				args.add("/" + key + ":" + value);
+@@ -574,12 +577,36 @@
+ 
+ 	public static boolean sendKeyEvent(long inst, int keycode, boolean down)
+ 	{
+-		return freerdp_send_key_event(inst, keycode, down);
++		return freerdp_send_key_event(inst, keycode, down, false);
+ 	}
+ 
+ 	public static boolean sendUnicodeKeyEvent(long inst, int keycode, boolean down)
+ 	{
+-		return freerdp_send_unicodekey_event(inst, keycode, down);
++		return freerdp_send_unicodekey_event(inst, keycode, down, false);
++	}
++
++	public static boolean updateGraphicsRegion(long inst, Bitmap bitmap, int sourceX, int sourceY,
++	    int destinationX, int destinationY, int width, int height) {
++		return freerdp_update_graphics_region(inst, bitmap, sourceX, sourceY,
++		    destinationX, destinationY, width, height);
++	}
++
++	public static boolean sendKeyEvent(long inst, int keycode, boolean down, boolean repeat) {
++		return freerdp_send_key_event(inst, keycode, down, repeat);
++	}
++
++	public static boolean sendUnicodeKeyEvent(long inst, int keycode, boolean down, boolean repeat) {
++		return freerdp_send_unicodekey_event(inst, keycode, down, repeat);
++	}
++
++	public static boolean sendResizeEvent(long inst, int width, int height) {
++		return freerdp_send_monitor_layout(inst, width, height);
++	}
++
++	public static void reportConnectionFailure(long inst) {
++		OnConnectionFailure(inst);
++		OnDisconnecting(inst);
++		OnDisconnected(inst);
+ 	}
+ 
+ 	public static boolean isUnicodeInputSupported(long inst)
+@@ -887,7 +914,7 @@
+ 	{
+ 		void OnSettingsChanged(int width, int height, int bpp);
+ 
+-		void OnReconnecting();
++		default void OnReconnecting() {}
+ 
+ 		boolean OnAuthenticate(StringBuilder username, StringBuilder domain,
+ 		                       StringBuilder password);
+@@ -902,7 +929,7 @@
+ 		                               String fingerprint, String oldSubject, String oldIssuer,
+ 		                               String oldFingerprint, long flags);
+ 
+-		boolean OnExperimentalFeature(int feature);
++		default boolean OnExperimentalFeature(int feature) { return false; }
+ 
+ 		void OnGraphicsUpdate(int x, int y, int width, int height);
+ 
+@@ -910,24 +937,24 @@
+ 
+ 		void OnRemoteClipboardChanged(String data);
+ 
+-		void OnRemoteClipboardImageChanged(byte[] data);
+-
+-		void OnPointerSet(int[] pixels, int width, int height, int hotX, int hotY);
+-
+-		void OnPointerSetNull();
+-
+-		void OnPointerSetDefault();
+-
+-		void OnRailWindowUpdate(long windowId, int width, int height, int[] pixels);
+-
+-		void OnRailWindowMove(long windowId, int x, int y, int w, int h);
+-
+-		void OnRailWindowHide(long windowId);
+-
+-		void OnRailWindowDestroy(long windowId);
+-
+-		void OnRailSessionEnd();
+-
+-		void OnRailMonitoredDesktop(long[] windowIds, long activeWindowId);
++		default void OnRemoteClipboardImageChanged(byte[] data) {}
++
++		default void OnPointerSet(int[] pixels, int width, int height, int hotX, int hotY) {}
++
++		default void OnPointerSetNull() {}
++
++		default void OnPointerSetDefault() {}
++
++		default void OnRailWindowUpdate(long windowId, int width, int height, int[] pixels) {}
++
++		default void OnRailWindowMove(long windowId, int x, int y, int w, int h) {}
++
++		default void OnRailWindowHide(long windowId) {}
++
++		default void OnRailWindowDestroy(long windowId) {}
++
++		default void OnRailSessionEnd() {}
++
++		default void OnRailMonitoredDesktop(long[] windowIds, long activeWindowId) {}
+ 	}
+ }

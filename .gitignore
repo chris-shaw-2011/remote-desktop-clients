@@ -211,6 +211,7 @@ common/aars/android-database-sqlcipher-*.aar
 
 GITHUB_TOKEN
 build-*
+!remoteClientLib/jni/libs/build-freerdp3.sh
 !/.github/workflows/build-ardp.yml
 upload_*
 trigger-*

@@ -1,7 +1,8 @@
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
 }
-include ':remoteClientLib:jni:libs:deps:FreeRDP:client:Android:Studio:freeRDPCore'
+include ':freeRDPCore'
+project(':freeRDPCore').projectDir = file('freerdp-client')
 include ':pubkeyGenerator'
 include ':bVNC'
 include ':bVNC-app'
