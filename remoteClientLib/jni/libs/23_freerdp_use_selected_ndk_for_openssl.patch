@@ -10,3 +10,6 @@ index d5c815741..c57375482 100755
  
  	echo "CONFIG=$CONFIG"
  	echo "DST_PREFIX=$DST_PREFIX"
+@@ -34 +35 @@ function build {
+-	common_run ./Configure ${CONFIG} -D__ANDROID_API__=$NDK_TARGET
++	common_run ./Configure ${CONFIG} -D__ANDROID_API__=$NDK_TARGET no-module -Wl,-z,max-page-size=16384

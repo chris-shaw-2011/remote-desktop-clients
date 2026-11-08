@@ -506,29 +506,28 @@ fail_handler() {
 
 build_freerdp() {
 
-    if [ -f FREERDP_BUILT ] && [ "${FORCE_FREERDP_BUILD:-false}" != "true" ]
-    then
-      echo ; echo
-      echo "FreeRDP was previously built. Remove $(realpath FREERDP_BUILT) if you want to rebuild it."
-      echo ; echo
-      return
+    # Hash all tracked recipe inputs, selected ABIs and environment flags. A
+    # legacy empty marker must never authorize reuse of prebuilt libraries.
+    local fingerprint missing_artifact abi f
+    fingerprint=$( { printf '%s\n' "$abis" "${LDFLAGS:-}" "${CFLAGS:-}" "${CXXFLAGS:-}" "${WITH_MEDIACODEC:-}"; sha256sum build-deps.conf build-deps.sh freerdp_AndroidManifest.xml ./*_freerdp_*.patch; } | sha256sum | cut -d' ' -f1 )
+    missing_artifact=true
+    if [ -f FREERDP_BUILT ] && [ "$(cat FREERDP_BUILT)" = "$fingerprint" ] && [ "${FORCE_FREERDP_BUILD:-false}" != "true" ]; then
+        missing_artifact=false
+        for abi in $abis; do
+            for f in ${freerdp_artifacts} libssl.so libcrypto.so; do
+                if [ ! -f "deps/${freerdp_build}/client/Android/Studio/freeRDPCore/src/main/jniLibs/${abi}/${f}" ]; then
+                    missing_artifact=true
+                fi
+            done
+        done
     fi
-
+    if [ "$missing_artifact" = false ]; then
+        echo "FreeRDP build inputs and artifacts match; skipping rebuild."
+        return
+    fi
+    rm -f FREERDP_BUILT
     pushd deps
     basedir="$(pwd)"
-
-    missing_artifact="${FORCE_FREERDP_BUILD:-false}"
-    for abi in $abis
-    do
-      for f in ${freerdp_artifacts}
-      do
-        if [ ! -f ${freerdp_build}/client/Android/Studio/freeRDPCore/src/main/jniLibs/${abi}/${f} -a \
-             ! -f ${freerdp_build}/client/Android/Studio/freeRDPCore/src/main/jniLibs.DISABLED/${abi}/${f} ]
-        then
-          missing_artifact="true"
-        fi
-      done
-    done
 
     if [ $missing_artifact == "true" ]
     then
@@ -543,8 +542,9 @@ build_freerdp() {
         git checkout ${freerdp_ver}
         git reset --hard
 
-        echo "Deleting build directory"
-        rm -rf build/
+        echo "Deleting build and native output directories"
+        rm -rf build/ client/Android/Studio/freeRDPCore/src/main/jniLibs/ \
+            client/Android/Studio/freeRDPCore/src/main/jniLibs.DISABLED/
 
         echo "Patching the configuration"
 
@@ -552,9 +552,9 @@ build_freerdp() {
                -e 's/WITH_JPEG=.*/WITH_JPEG=1/'\
                -e 's/WITH_OPENH264=.*/WITH_OPENH264=0/'\
                -e 's/WITH_FFMPEG=.*/WITH_FFMPEG=1/'\
-               -e 's/OPENSSL_TAG=.*/OPENSSL_TAG=openssl-'${openssl_ver}'/'\
+               -e 's/OPENSSL_TAG=.*/OPENSSL_TAG=openssl-'${freerdp_openssl_ver}'/'\
                -e 's/NDK_TARGET=26/NDK_TARGET=21/'\
-               -e 's/OPENSSL_HASH=.*/OPENSSL_HASH='${openssl_hash}'/'\
+               -e 's/OPENSSL_HASH=.*/OPENSSL_HASH='${freerdp_openssl_hash}'/'\
                -e "s/BUILD_ARCH=.*/BUILD_ARCH=\"${abis}\"/"\
                -e 's/OPENH264_TAG=.*/OPENH264_TAG='${freerdp_openh264_version}'/'\
                -e 's/OPENH264_HASH=.*/OPENH264_HASH='${freerdp_openh264_hash}'/'\
@@ -581,8 +581,6 @@ build_freerdp() {
         export PATH=${CMAKE_PATH}:${PATH}
         export CMAKE_PROGRAM=${CMAKE_PATH}/cmake
 
-        rm -rf "${ANDROID_SDK}"/cmake
-        cp -a "${CMAKE_DIR}" "${ANDROID_SDK}"/cmake
         ./scripts/android-build-freerdp.sh
 
         # Prepare the FreeRDPCore project for use as a library
@@ -592,7 +590,7 @@ build_freerdp() {
     fi
 
     popd
-    touch FREERDP_BUILT
+    printf '%s\n' "$fingerprint" > FREERDP_BUILT
 }
 
 
