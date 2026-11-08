@@ -16,10 +16,11 @@ user's untracked `docs/QUEST_3_DEPENDENCY_UPDATE_PLAN.md`.
 | 9ffa4937 | Android UI/lifecycle bundle | All app releases, 46 affected tests, graph; Core requires compile37, target stays36 |
 | f241056c | Native RDP OpenSSL3.5.9, separate from unchanged SPICE pin | Clean ARM64 build, all app releases, 46 affected tests, packaged hash/linkage/alignment |
 | cf65bfc0 | FreeRDP/WinPR3.33.0, slim module, native ports and certificate/probe tests | Clean ARM64 build, all app releases, 61 tests, JNI23 methods/25 callbacks, graph, APK/native audit |
+| c9727166 | FFmpeg9.0.2 with focused codec build | Clean ARM64 build, all app releases, 61 tests, packaged versions/hashes/linkage/alignment and JNI audit |
 
-Native FreeRDP3 is committed as `cf65bfc0`. FFmpeg9.0.2 recipe changes are now
-prepared but await parent clean build and packaging verification before their
-separate commit. No signing, installation or publishing occurred.
+Native FreeRDP3 and FFmpeg9.0.2 are committed and verified. Bouncy Castle is now
+active, awaiting parent verification and its separate commit. No signing,
+installation or publishing occurred.
 Physical Quest/database/Windows/NLA/decoder/audio/LAN/WireGuard acceptance remains
 pending. No Android device was connected.
 
@@ -28,14 +29,13 @@ pending. No Android device was connected.
 1. FreeRDP3 is committed. Patch context lines have intentional leading spaces:
    run whitespace checks excluding `*.patch`, and retain strict patch application
    checks. Do not alter patch context just to satisfy generic whitespace lint.
-2. Verify the prepared FFmpeg9.0.2 update with a clean native build, all app
-   releases, affected tests and packaged versions/linkage, then commit before the
-   next agent. Codec decision and pending physical acceptance are documented in
-   `QUEST_3_DEPENDENCY_PROGRESS.md`; no FFmpeg4/8 fallback is permitted.
-3. Delegate Bouncy Castle next, then SnakeYAML2.7, each verified and committed.
-   Official BC page showed provider/PKIX/utility1.86 but TLS1.86.1; recheck that
-   patch release under the plan's security-update instruction. Leave SpongyCastle
-   and unrelated SSH packages unchanged.
+2. Verify the active Bouncy Castle update with root `assembleRelease`, affected
+   tests, the aRDP runtime graph and `python3 /tmp/quest-bc-smoke.py 1.86.2`.
+   Provider/PKIX/utility target1.86; TLS1.86.2 is confirmed by Maven Central's
+   published metadata and POM despite the official download page listing1.86.1.
+   Review the narrow patch exception in `QUEST_3_DEPENDENCY_PROGRESS.md`, then
+   commit separately. Leave SpongyCastle and unrelated SSH packages unchanged.
+3. Delegate SnakeYAML2.7 next, then verify and commit separately.
 4. Finish result/acceptance documentation and keep this resume log current.
 
 ## Implementation and evidence pointers
@@ -52,8 +52,10 @@ Native rebuild from `remoteClientLib/jni/libs`:
 Parent runs privileged commands: agent approval requests previously stalled.
 Freeze script/patch inputs during builds; do not edit a running Bash script.
 
-Latest successful logs: `/tmp/quest-freerdp3-native-pass.log`,
-`/tmp/quest-freerdp3-unit.log`, `/tmp/quest-freerdp3-apps.log`.
+Latest successful native/all-app logs: `/tmp/quest-ffmpeg9-native.log`,
+`/tmp/quest-ffmpeg9-apps.log`; FreeRDP evidence also remains at
+`/tmp/quest-freerdp3-native-pass.log`, `/tmp/quest-freerdp3-unit.log` and
+`/tmp/quest-freerdp3-apps.log`.
 Unit counts: common1, bVNC29, remoteClientLib24, freeRDPCore4, helper3 =61.
 `/tmp/quest-native-audit.py` checks APK ARM64/linkage; `/tmp/quest-jni-audit.py`
 checks JNI exports and Java descriptors. All17 packaged libraries resolve needed
@@ -73,7 +75,7 @@ Verified archives in `/tmp` and `remoteClientLib/jni/libs/tar/rdp`:
 - FreeRDP3.33 SHA25680cbcf17a7de00909f2be805c7d93764596cd712046addc18c30594137c0b879;
   pristine `/tmp/freerdp-3.33.0`.
 - OpenSSL3.5.9 SHA256603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a.
-- **Prepared FFmpeg9.0.2** official `/tmp/ffmpeg-9.0.2.tar.xz`, SHA256
+- Committed FFmpeg9.0.2 official `/tmp/ffmpeg-9.0.2.tar.xz`, SHA256
   8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e.
   Detached signature verified with upstream key
   FCF986EA15E6E293A5644F10B4322F04D67658D8. GitHub n9.0.2 tar also exists in /tmp.

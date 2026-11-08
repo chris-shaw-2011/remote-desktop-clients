@@ -43,8 +43,8 @@ apply plugin: "com.google.osdetector"
 
 dependencies {
     api 'org.connectbot:sshlib:2.2.23'
-    implementation group: 'org.bouncycastle', name: 'bcprov-jdk18on', version: '1.80'
-    implementation group: 'org.bouncycastle', name: 'bcpkix-jdk18on', version: '1.80'
+    implementation group: 'org.bouncycastle', name: 'bcprov-jdk18on', version: '1.86'
+    implementation group: 'org.bouncycastle', name: 'bcpkix-jdk18on', version: '1.86'
     api 'net.vrallev.ecc:ecc-25519-java:1.0.3'
     api 'io.moatwel.crypto:eddsa:0.8.1'
     api group: 'net.i2p.crypto', name: 'eddsa', version: '0.3.0'

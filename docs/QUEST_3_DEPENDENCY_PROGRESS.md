@@ -31,6 +31,9 @@ require renewed confirmation because their format does not bind a port.
 
 ## FFmpeg 9.0.2
 
+Committed as `c9727166` after the clean native, all-application and 61-test
+verification described below.
+
 The tracked RDP recipe pins the official `ffmpeg-9.0.2.tar.xz` release archive,
 SHA-256 `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`.
 Its detached signature was verified against upstream key
@@ -68,6 +71,52 @@ native MediaCodec and deliberately selected software fallback, AVC420/AVC444,
 resize/color/text rendering, independent and multi-monitor sessions, sound,
 microphone if used, reconnects, and LAN/WireGuard. No attached device is available;
 source inspection alone does not establish FFmpeg 9 runtime compatibility.
+
+## Bouncy Castle 1.86 family
+
+Provider and PKIX declarations are 1.86; TLS is pinned to 1.86.2. This narrow
+patch exception follows the plan's newer-security-patch recheck: on November 8,
+the [official download page](https://www.bouncycastle.org/download/bouncy-castle-java/)
+still listed TLS 1.86.1, but the publisher's
+[Maven Central metadata](https://repo.maven.apache.org/maven2/org/bouncycastle/bctls-jdk18on/maven-metadata.xml)
+identifies 1.86.2 as latest/release (updated October 7), and its
+[published POM](https://repo.maven.apache.org/maven2/org/bouncycastle/bctls-jdk18on/1.86.2/bctls-jdk18on-1.86.2.pom)
+depends on utility 1.86. The target graph is provider/PKIX/utility 1.86 and TLS
+1.86.2, using exact declarations and normal transitive resolution, without a
+blanket force. The runtime graph confirms those exact versions, while separate
+SpongyCastle core/provider remain 1.58.0.0. SnakeYAML 2.7 remains next.
+
+The first parent application build compiled but found duplicate
+`META-INF/LICENSE.md` resources in the four updated BC jars. Their license
+contents are byte-identical (1,171 bytes; SHA-256
+`0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd`).
+A shared application-packaging rule retains one copy of that exact path using
+`pickFirsts`; no broad metadata exclusion is added. All release builds and all
+61 tests pass. One freeaRDP packaging invocation required a retry; its isolated
+retry and the final aggregate release build passed without another code change.
+Logs: `/tmp/quest-bc-validation-final.log`, `/tmp/quest-bc-package-retry.log`,
+`/tmp/quest-bc-all-apps-pass.log`.
+
+The exact-version host smoke passes shipped RSA/EC PKCS8 and PEM recovery,
+PKCS1/signature, X.509/fingerprint and BC JSSE TLS 1.2 initialization checks
+(`/tmp/quest-bc-smoke-result.log`). It uses disposable keys and host adapters for
+Android Base64/Log; no TLS connection or Android runtime acceptance is claimed.
+The APK retains the single license entry and passes ZIP alignment.
+
+Call-site review found explicit BC provider use for RSA/DSA/EC key recovery in
+`PubkeyUtils`, lightweight ASN.1/RSA/AES/PBKDF2 use in SecureVNCPlugin classes,
+and the BC JSSE provider in the VNC `TLSTunnelBase`. PEM key import still uses
+ConnectBot and Android Base64; certificate parsing uses Java's X.509 factory.
+No algorithm, stored-key format or TLS policy is changed. SpongyCastle,
+ConnectBot, EdDSA and ECC dependencies remain unchanged. Direct native RDP TLS
+uses OpenSSL 3.5.9; this BC update makes no RDP speed or NLA improvement claim.
+
+A bounded temporary JVM smoke is prepared at `/tmp/quest-bc-smoke.py`: after
+building, run `python3 /tmp/quest-bc-smoke.py 1.86.2`. It exercises the shipped
+RSA/EC PKCS#8 and PEM recovery methods, SecureVNCPlugin PKCS#1 generation and
+signature verification, certificate parsing/fingerprinting and BC JSSE TLS 1.2
+initialization. Host Base64/log adapters stand in for Android; it does not prove
+Android provider behavior, a server handshake or physical Quest acceptance.
 
 ## Android UI and lifecycle
 

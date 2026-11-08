@@ -12,6 +12,16 @@ buildscript {
 }
 
 allprojects {
+    plugins.withId('com.android.application') {
+        android {
+            packaging {
+                resources {
+                    // BC 1.86-family modules ship the same license; retain one copy.
+                    pickFirsts += ['META-INF/LICENSE.md']
+                }
+            }
+        }
+    }
     repositories {
         mavenCentral()
         google()
