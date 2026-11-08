@@ -1,85 +1,84 @@
 # Quest dependency implementation resume log
 
 Updated November 8, 2026. Branch: `dependency/quest-3-runtime-updates`.
+Implementation and local validation are complete. Do not restart the dependency
+migrations. Read `QUEST_3_DEPENDENCY_PROGRESS.md` for versions, evidence and limits.
 
-User requires sequential dependency agents, parent verification and a separate
-commit for each update. Prioritize ARM64 aRDP; other apps must build with minimal
-unrelated changes. Do not push: master pushes publish releases. Preserve the
-user's untracked `docs/QUEST_3_DEPENDENCY_UPDATE_PLAN.md`.
+## Completed commits
 
-## Completed
+| Commit | Update |
+| --- | --- |
+| a60c76f7 | Baseline and 27 old native patches inventoried |
+| 69c86295 | SQLCipher4.20 / SQLite2.7.1 / shared minimum SDK23 |
+| 9ffa4937 | UI/lifecycle bundle; Core requires compile37, target stays36 |
+| f241056c | RDP OpenSSL3.5.9 LTS |
+| cf65bfc0 | FreeRDP/WinPR3.33.0 and slim Java/JNI integration |
+| c9727166 | FFmpeg9.0.2 with RDP codec whitelist |
+| d482afd2 | Bouncy Castle provider/PKIX/utility1.86, TLS1.86.2 |
+| Commit containing this log | SnakeYAML2.7 plus five real-reader compatibility tests |
 
-| Commit | Update | Verification |
-| --- | --- | --- |
-| a60c76f7 | Baseline, all 27 old native patches inventoried | 46 original tests, aRDP release, fresh graph |
-| 69c86295 | SQLCipher4.20 / SQLite2.7.1 / min23 | All app releases, 46 affected tests, graph, ARM64 library/alignment |
-| 9ffa4937 | Android UI/lifecycle bundle | All app releases, 46 affected tests, graph; Core requires compile37, target stays36 |
-| f241056c | Native RDP OpenSSL3.5.9, separate from unchanged SPICE pin | Clean ARM64 build, all app releases, 46 affected tests, packaged hash/linkage/alignment |
-| cf65bfc0 | FreeRDP/WinPR3.33.0, slim module, native ports and certificate/probe tests | Clean ARM64 build, all app releases, 61 tests, JNI23 methods/25 callbacks, graph, APK/native audit |
-| c9727166 | FFmpeg9.0.2 with focused codec build | Clean ARM64 build, all app releases, 61 tests, packaged versions/hashes/linkage/alignment and JNI audit |
+Every dependency update was delegated, reviewed, verified and committed before
+starting the next dependency. The complex FreeRDP update used focused native and
+Java workers after an initial broad worker did not finish; its final integration
+was clean-built and committed only after all checks passed.
 
-Native FreeRDP3 and FFmpeg9.0.2 are committed and verified. Bouncy Castle is now
-active, awaiting parent verification and its separate commit. No signing,
-installation or publishing occurred.
-Physical Quest/database/Windows/NLA/decoder/audio/LAN/WireGuard acceptance remains
-pending. No Android device was connected.
+## Verified final state
 
-## Exact next work
+- Clean ARM64 native stack: FreeRDP3.33.0, OpenSSL3.5.9, FFmpeg9.0.2.
+- Every application release clean-builds with four Gradle workers.
+- All66 local tests pass: common1, bVNC34, remoteClientLib24, core4, helper3.
+- Static JNI audit:23 native methods and25 callback sites agree.
+- All17 packaged ARM64 libraries resolve DT_NEEDED entries; no old FreeRDP2.
+- Native version strings and clean-output hashes match the final APK. New RDP
+  libraries align16KB; ZIP alignment passes. Three unchanged prebuilt inputs
+  remain4KB: libc++_shared, GStreamer, SPICE.
+- App ID/version/task flags retained; compile37, target36, minimum23.
+- BC runtime graph and actual shared key/certificate host smoke pass. Separate
+  SpongyCastle remains1.58.0.0; SSH and unrelated native stacks were not refreshed.
+- Production YAML reader unchanged; shipped fixture, invalid/recursive input and
+  alias-limit behavior tested with2.7.
 
-1. FreeRDP3 is committed. Patch context lines have intentional leading spaces:
-   run whitespace checks excluding `*.patch`, and retain strict patch application
-   checks. Do not alter patch context just to satisfy generic whitespace lint.
-2. Verify the active Bouncy Castle update with root `assembleRelease`, affected
-   tests, the aRDP runtime graph and `python3 /tmp/quest-bc-smoke.py 1.86.2`.
-   Provider/PKIX/utility target1.86; TLS1.86.2 is confirmed by Maven Central's
-   published metadata and POM despite the official download page listing1.86.1.
-   Review the narrow patch exception in `QUEST_3_DEPENDENCY_PROGRESS.md`, then
-   commit separately. Leave SpongyCastle and unrelated SSH packages unchanged.
-3. Delegate SnakeYAML2.7 next, then verify and commit separately.
-4. Finish result/acceptance documentation and keep this resume log current.
+Final clean command:
 
-## Implementation and evidence pointers
+```bash
+./gradlew --no-daemon --max-workers=4 --stacktrace clean \
+  :freeRDPCore:testDebugUnitTest :common:testDebugUnitTest \
+  :remoteClientLib:testDebugUnitTest :bVNC:testDebugUnitTest \
+  :questAdbHelper-app:testDebugUnitTest assembleRelease \
+  :aRDP-app:dependencies --configuration releaseRuntimeClasspath
+```
 
-Read `QUEST_3_DEPENDENCY_PROGRESS.md` and `FREERDP_3_PATCH_MAP.md` for exact changes.
-The old2.x patch series was removed after mapping all replacements. Native recipe:
-`remoteClientLib/jni/libs/build-freerdp3.sh`, called by `build-deps.sh`; tracked
-pins in `build-deps.conf`, build patch `freerdp3-build.patch`, Java patch
-`remoteClientLib/freerdp-adapter/java.patch`, C ports `freerdp3-patches/`.
-`freerdp-client/` is the slim `:freeRDPCore` module; no Room/second database/UI.
+The default-worker incremental aggregate build had packaging-worker failures in
+unused variants; the clean four-worker build passed without a production-code
+fix. Do not claim an identified cause. aRDP itself also built in earlier default
+worker checks. CI still builds only the personal ARM64 aRDP artifact.
 
-Native rebuild from `remoteClientLib/jni/libs`:
-`ANDROID_ABIS=arm64-v8a FORCE_FREERDP_BUILD=true ANDROID_SDK=/home/localuser/Android/Sdk ./build-deps.sh -j 16 freerdp`.
-Parent runs privileged commands: agent approval requests previously stalled.
-Freeze script/patch inputs during builds; do not edit a running Bash script.
+Latest successful logs: `/tmp/quest-final-clean-build.log`,
+`/tmp/quest-ffmpeg9-native.log`, `/tmp/quest-bc-smoke-result.log`.
+Native/JNI audit helpers and JSON evidence remain in `/tmp/quest-*`; these are
+local temporary evidence, not required application source. Native recipe and
+checksums are tracked under `remoteClientLib/jni/libs`; its unchanged-input
+skip and all required artifact checks were verified. Do not edit running native
+scripts or patch inputs. Parent should run privileged Gradle/network commands;
+agent escalation requests previously stalled.
 
-Latest successful native/all-app logs: `/tmp/quest-ffmpeg9-native.log`,
-`/tmp/quest-ffmpeg9-apps.log`; FreeRDP evidence also remains at
-`/tmp/quest-freerdp3-native-pass.log`, `/tmp/quest-freerdp3-unit.log` and
-`/tmp/quest-freerdp3-apps.log`.
-Unit counts: common1, bVNC29, remoteClientLib24, freeRDPCore4, helper3 =61.
-`/tmp/quest-native-audit.py` checks APK ARM64/linkage; `/tmp/quest-jni-audit.py`
-checks JNI exports and Java descriptors. All17 packaged libraries resolve needed
-libraries. Three unchanged prebuilt libs still have4KB ELF LOAD alignment:
-libc++_shared, GStreamer, SPICE; do not refresh unrelated stacks or claim full16KB
-compatibility. New RDP libraries and APK ZIP alignment pass.
+Final unsigned APK:
+`aRDP-app/build/outputs/apk/release/aRDP-app-arm64-v8a-release-unsigned.apk`
 
-Native3.33 uses NDKr25c plus a tiny private MediaCodec keyframe bit constant missing
-from old headers (NDK28 confirms value1), system CMake3.28.3 (>=3.24 required), API23.
-It keeps buffered OpenSL150ms; AAudio and direct UDP remain off. All56 baseline
-keyboard integer values match. H264 probe is lazy/one-shot/bounded, after class init.
-Known_hosts2 migration trusts only exact host+port+fingerprint matches; host-only
-legacy pins prompt; no old certificate files are deleted.
+SHA256: `9dfbf456bde41a86df026a0ee0331572e01730ab1fb18295acfa52bd5b41244f`.
 
-Verified archives in `/tmp` and `remoteClientLib/jni/libs/tar/rdp`:
+## Remaining acceptance, not unfinished dependency edits
 
-- FreeRDP3.33 SHA25680cbcf17a7de00909f2be805c7d93764596cd712046addc18c30594137c0b879;
-  pristine `/tmp/freerdp-3.33.0`.
-- OpenSSL3.5.9 SHA256603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a.
-- Committed FFmpeg9.0.2 official `/tmp/ffmpeg-9.0.2.tar.xz`, SHA256
-  8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e.
-  Detached signature verified with upstream key
-  FCF986EA15E6E293A5644F10B4322F04D67658D8. GitHub n9.0.2 tar also exists in /tmp.
+No device was connected at the final adb check. Quest OS/API/page size, signed
+in-place update/database/backup/rollback, real Windows TLS/NLA and changed-cert
+rejection, MediaCodec/software fallback, sound, focus/input/resizing, independent
+and shared multi-monitor sessions, LAN/WireGuard and sustained-use measurements
+remain pending. Preserve the original signed APK and app data before those tests.
+No FPS, latency, battery or thermal improvement has been measured. Host-only
+legacy certificate pins need renewed confirmation; exact host+port pins can migrate.
 
-Previous focused workers `/root/freerdp_native_port` and
-`/root/freerdp_java_adapter` completed their changes. No worker is needed to redo
-FreeRDP. Original broad worker produced only an inventory; do not restart it.
+Buffered OpenSL150ms remains selected. AAudio, direct RDP UDP and OpenH264 remain
+off. No native SPICE/GStreamer refresh, Room/second DB or UI rewrite was added.
+Nothing was pushed, signed, installed or published. Do not do those actions
+without the user's instruction. Preserve the original untracked
+`docs/QUEST_3_DEPENDENCY_UPDATE_PLAN.md`; it is not an uncommitted code change.

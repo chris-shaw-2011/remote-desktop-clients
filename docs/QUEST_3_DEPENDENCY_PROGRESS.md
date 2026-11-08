@@ -1,5 +1,42 @@
 # Quest 3 dependency update progress
 
+Implementation complete; local verification passed on November 8, 2026.
+Each update was reviewed and committed separately on
+`dependency/quest-3-runtime-updates`. Nothing was pushed, signed or installed.
+
+| Dependency | Baseline | Final resolved/build version |
+| --- | --- | --- |
+| FreeRDP / WinPR | 2.11.7 | 3.33.0 |
+| FFmpeg | 4.4.1 | 9.0.2 |
+| Native RDP OpenSSL | 1.1.1w | 3.5.9 LTS |
+| SQLCipher Android | legacy local 4.5.4 AAR | maintained 4.20.0 |
+| AndroidX SQLite/KTX | 2.2.0 | 2.7.1 |
+| Core/KTX | 1.13.0 resolved | 1.19.1 |
+| AppCompat / Material | 1.7.1 / 1.13.0 | 1.8.0 / 1.14.0 |
+| Activity/KTX | 1.8.0 | 1.13.0 |
+| Fragment / KTX | 1.5.4 / 1.3.6 | 1.9.1 aligned |
+| Lifecycle | 2.6.2 | 2.11.0 aligned |
+| Preference/KTX / VectorDrawable | 1.2.0 / 1.1.0 | 1.2.1 / 1.2.0 |
+| Bouncy Castle provider/PKIX/utility | 1.80 / 1.80.2 mixed | 1.86 aligned |
+| Bouncy Castle TLS | 1.80 | 1.86.2 verified patch release |
+| SnakeYAML | 2.4 | 2.7 |
+
+Final clean Gradle build passed every application release and **66 tests** with
+`--max-workers=4`; log `/tmp/quest-final-clean-build.log`. The earlier default
+worker-count incremental aggregate build had failures in AGP's packaging workers
+for unused variants without a useful cause. The clean bounded-worker invocation
+passed without another production-code change; no causal diagnosis is claimed.
+
+The final ARM64 APK is
+`aRDP-app/build/outputs/apk/release/aRDP-app-arm64-v8a-release-unsigned.apk`,
+SHA-256 `9dfbf456bde41a86df026a0ee0331572e01730ab1fb18295acfa52bd5b41244f`.
+It retains `com.iiordanov.aRDP`, `v6.5.0` / 116500, target 36 and the existing
+picker/session task flags. Compile SDK is 37 and minimum SDK is 23. Final native
+input hashes, versions, linkage, JNI signatures and ZIP alignment pass. The three
+unchanged 4 KB prebuilt libraries and physical-device acceptance limitations are
+listed below. No headset was attached at the final check; no performance or
+in-place database migration result is claimed.
+
 ## FreeRDP / WinPR 3.33.0
 
 The stack uses verified FreeRDP 3.33.0 source and Android CMake ExternalDeps,
@@ -74,6 +111,9 @@ source inspection alone does not establish FFmpeg 9 runtime compatibility.
 
 ## Bouncy Castle 1.86 family
 
+Committed as `d482afd2` after all application releases, all 61 local tests and
+the actual shipped key/certificate smoke passed.
+
 Provider and PKIX declarations are 1.86; TLS is pinned to 1.86.2. This narrow
 patch exception follows the plan's newer-security-patch recheck: on November 8,
 the [official download page](https://www.bouncycastle.org/download/bouncy-castle-java/)
@@ -84,7 +124,7 @@ identifies 1.86.2 as latest/release (updated October 7), and its
 depends on utility 1.86. The target graph is provider/PKIX/utility 1.86 and TLS
 1.86.2, using exact declarations and normal transitive resolution, without a
 blanket force. The runtime graph confirms those exact versions, while separate
-SpongyCastle core/provider remain 1.58.0.0. SnakeYAML 2.7 remains next.
+SpongyCastle core/provider remain 1.58.0.0. SnakeYAML 2.7 is the final active update.
 
 The first parent application build compiled but found duplicate
 `META-INF/LICENSE.md` resources in the four updated BC jars. Their license
@@ -111,16 +151,29 @@ No algorithm, stored-key format or TLS policy is changed. SpongyCastle,
 ConnectBot, EdDSA and ECC dependencies remain unchanged. Direct native RDP TLS
 uses OpenSSL 3.5.9; this BC update makes no RDP speed or NLA improvement claim.
 
-A bounded temporary JVM smoke is prepared at `/tmp/quest-bc-smoke.py`: after
-building, run `python3 /tmp/quest-bc-smoke.py 1.86.2`. It exercises the shipped
-RSA/EC PKCS#8 and PEM recovery methods, SecureVNCPlugin PKCS#1 generation and
-signature verification, certificate parsing/fingerprinting and BC JSSE TLS 1.2
-initialization. Host Base64/log adapters stand in for Android; it does not prove
-Android provider behavior, a server handshake or physical Quest acceptance.
+## SnakeYAML 2.7
+
+The shared `bVNC` declaration changes from 2.4 to 2.7. The sole parser call site,
+`CustomClientConfigFileReader`, continues to use `new Yaml().load(reader)`;
+no removed compact-constructor API is used. The reader and configuration policy
+are unchanged. This custom VNC configuration path does not affect native RDP
+rendering or TLS.
+
+Five focused reader tests use the shipped `custom_vnc_client.yaml-EXAMPLE` and
+check its exact nested map, integer visibility value and localized strings,
+malformed YAML rejection, default recursive-key rejection, preserved recursive
+value identity, and the default collection-alias boundary (50 accepted, 51
+rejected). The asset is a declared test-task input so fixture edits rerun tests.
+No new parser restrictions or config conversion are introduced.
+
+All five new tests and all existing suites pass (66 total), the clean all-app
+release build passes, and the aRDP runtime graph resolves SnakeYAML 2.7. No
+production parser or native inputs changed. Physical custom-client
+configuration and Quest acceptance remain unverified.
 
 ## Android UI and lifecycle
 
-The shared UI dependency declarations target Core/KTX 1.19.1, AppCompat 1.8.0, Material 1.14.0, Activity/KTX 1.13.0, Fragment/KTX 1.9.1, Lifecycle modules in the existing graph 2.11.0, Preference/KTX 1.2.1 and VectorDrawable 1.2.0. Transitive modules are aligned with constraints, not forced. Core KTX remains declared until the resulting graph and compilation are verified. The Core and Core KTX 1.19.1 AAR metadata requires compile SDK 37, so the shared compile SDK is now 37; target SDK remains 36 and minimum SDK remains 23. [Material 1.14.0 release notes](https://github.com/material-components/material-components-android/releases/tag/1.14.0) specify minimum SDK 23 and a library compile SDK of 35. No application lifecycle change is made. The aRDP CI workflow derives the platform from the shared compile SDK and uses `platforms;android-37.0`, the package identifier recorded by the installed SDK.
+The shared UI dependency declarations target Core/KTX 1.19.1, AppCompat 1.8.0, Material 1.14.0, Activity/KTX 1.13.0, Fragment/KTX 1.9.1, Lifecycle modules in the existing graph 2.11.0, Preference/KTX 1.2.1 and VectorDrawable 1.2.0. Transitive modules are aligned with constraints, not forced. Core KTX remains aligned with the existing graph; source compilation and resolution are verified. The Core and Core KTX 1.19.1 AAR metadata requires compile SDK 37, so the shared compile SDK is now 37; target SDK remains 36 and minimum SDK remains 23. [Material 1.14.0 release notes](https://github.com/material-components/material-components-android/releases/tag/1.14.0) specify minimum SDK 23 and a library compile SDK of 35. No application lifecycle change is made. The aRDP CI workflow derives the platform from the shared compile SDK and uses `platforms;android-37.0`, the package identifier recorded by the installed SDK.
 
 Root `assembleRelease`, the 46 focused common/bVNC/remoteClientLib tests and the aRDP runtime dependency report pass with the requested UI versions aligned. Kotlin remains 2.2.21, AGP 9.4.1 and Gradle 9.6.0. The ARM64 APK retains application ID/version and target 36/minimum 23, compiles against API 37, and passes ZIP alignment. Log: `/tmp/quest-ui-validation-sdk37.log`. Physical Quest acceptance remains necessary for panel focus and lifecycle, Back, keyboard and pointer input, resizing, dialogs, reconnects, independent sessions, and shared multi-monitor sessions on LAN and WireGuard.
 

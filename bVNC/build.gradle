@@ -54,7 +54,7 @@ dependencies {
     implementation group: 'androidx.preference', name: 'preference-ktx', version: '1.2.1'
     implementation "net.zetetic:sqlcipher-android:4.20.0"
     implementation "androidx.sqlite:sqlite-ktx:2.7.1"
-    implementation group: 'org.yaml', name: 'snakeyaml', version: '2.4'
+    implementation group: 'org.yaml', name: 'snakeyaml', version: '2.7'
     implementation 'org.apache.httpcomponents:httpcore:4.4.10'
     implementation "com.github.luben:zstd-jni:1.5.7-4@aar"
     implementation "androidx.core:core-ktx:1.19.1"
@@ -89,4 +89,5 @@ repositories {
 tasks.withType(Test).configureEach {
     // Tests read this SPICE layout generator input directly, so changes to it must rerun them.
     inputs.file('layouts/common_keycodes.in')
+    inputs.file('src/main/assets/custom_vnc_client.yaml-EXAMPLE')
 }
