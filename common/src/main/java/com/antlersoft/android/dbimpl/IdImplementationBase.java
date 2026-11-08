@@ -5,7 +5,7 @@ package com.antlersoft.android.dbimpl;
 
 import android.content.ContentValues;
 import android.database.Cursor;
-import net.sqlcipher.database.SQLiteDatabase;
+import net.zetetic.database.sqlcipher.SQLiteDatabase;
 
 /**
  * Specialization of ImplementationBase for tables that have a long

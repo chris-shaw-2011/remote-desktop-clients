@@ -55,7 +55,7 @@ import com.undatech.opaque.Connection;
 import com.undatech.opaque.input.RemoteKeyboard;
 import com.undatech.remoteClientUi.R;
 
-import net.sqlcipher.database.SQLiteDatabase;
+import net.zetetic.database.sqlcipher.SQLiteDatabase;
 
 import java.text.MessageFormat;
 import java.util.ArrayList;

@@ -32,8 +32,8 @@ import android.util.Log;
 
 import com.iiordanov.bVNC.input.AbstractMetaKeyBean;
 
-import net.sqlcipher.database.SQLiteDatabase;
-import net.sqlcipher.database.SQLiteOpenHelper;
+import net.zetetic.database.sqlcipher.SQLiteDatabase;
+import net.zetetic.database.sqlcipher.SQLiteOpenHelper;
 
 import java.io.File;
 
@@ -138,11 +138,20 @@ public class Database extends SQLiteOpenHelper {
     private static String password = "";
 
     private final Context context;
+    private final String helperPassword;
+    private final boolean followPassword;
+    private Database replacement;
 
     public Database(Context context) {
-        super(context, dbName, null, CURRVERS);
+        this(context, Database.password, true);
+    }
+
+    private Database(Context context, String password, boolean followPassword) {
+        super(context, dbName, password, null, CURRVERS, 0, null, null, false);
         this.context = context;
-        SQLiteDatabase.loadLibs(context);
+        this.helperPassword = password;
+        this.followPassword = followPassword;
+        System.loadLibrary("sqlcipher");
     }
 
     public static String getPassword() {
@@ -158,7 +167,7 @@ public class Database extends SQLiteOpenHelper {
     }
 
     /* (non-Javadoc)
-     * @see net.sqlcipher.database.SQLiteOpenHelper#onCreate(net.sqlcipher.database.SQLiteDatabase)
+     * @see net.zetetic.database.sqlcipher.SQLiteOpenHelper#onCreate(net.zetetic.database.sqlcipher.SQLiteDatabase)
      */
     @Override
     public void onCreate(SQLiteDatabase db) {
@@ -172,92 +181,106 @@ public class Database extends SQLiteOpenHelper {
         db.execSQL("INSERT INTO " + MetaList.GEN_TABLE_NAME + " VALUES ( 1, 'DEFAULT')");
     }
 
-    public SQLiteDatabase getWritableDatabase() {
-        return getWritableDatabase(Database.password);
+    // SQLCipher binds the password at helper construction. A long-lived helper
+    // must use a new helper after the master password changes.
+    private Database currentHelper() {
+        if (!followPassword || helperPassword.equals(Database.password)) {
+            if (replacement != null) {
+                replacement.close();
+                replacement = null;
+            }
+            return this;
+        }
+        if (replacement == null || !replacement.helperPassword.equals(Database.password)) {
+            if (replacement != null) replacement.close();
+            super.close();
+            replacement = new Database(context, Database.password, false);
+        }
+        return replacement;
     }
 
-    public SQLiteDatabase getReadableDatabase() {
-        return getReadableDatabase(Database.password);
+    @Override
+    public synchronized SQLiteDatabase getReadableDatabase() {
+        Database helper = currentHelper();
+        return helper == this ? super.getReadableDatabase() : helper.getReadableDatabase();
+    }
+
+    @Override
+    public synchronized SQLiteDatabase getWritableDatabase() {
+        Database helper = currentHelper();
+        return helper == this ? super.getWritableDatabase() : helper.getWritableDatabase();
+    }
+
+    @Override
+    public synchronized void close() {
+        if (replacement != null) {
+            replacement.close();
+            replacement = null;
+        }
+        super.close();
+    }
+
+    private static String sqlLiteral(String value) {
+        return "'" + value.replace("'", "''") + "'";
     }
 
     public boolean changeDatabasePassword(String newPassword) {
-        // Get readable database with old password
-        SQLiteDatabase db = getReadableDatabase(Database.password);
-        int version = db.getVersion();
+        SQLiteDatabase db = getReadableDatabase();
         String pathToDb = db.getPath();
-        // Delete any temp db that may be in the way.
-        deleteTempDatabase(pathToDb, "-temp");
-        String newFormat = null;
-
-        // If the previous key is an empty string, we must encrypt a plaintext DB.
-        if ("".equals(Database.password)) {
-            Log.i(TAG, "Previous database unencrypted, encrypting.");
-            newFormat = "encrypted";
-            // If the previous key is not an empty string, then we must rekey an existing DB.
-        } else if ("".equals(newPassword)) {
-            Log.i(TAG, "Previous database encrypted, decrypting.");
-            newFormat = "plaintext";
-            // If both the previous and new password are non-empty, we are rekeying the DB.
-        } else {
-            Log.i(TAG, "Previous database encrypted, rekeying.");
-            db.rawExecSQL(format("PRAGMA key = '%s'", Database.password));
-            Database.setPassword(newPassword);
-            // Rekey the database
-            db.rawExecSQL(format("PRAGMA rekey = '%s'", Database.password));
-        }
-
-        if (newFormat != null) {
-            // Write out the database in the new format.
-            db.rawExecSQL(format("ATTACH DATABASE '%s' AS %s KEY '%s'", db.getPath() + "-temp", newFormat, newPassword));
-            db.rawExecSQL(format("select sqlcipher_export('%s')", newFormat));
-            db.rawExecSQL(format("DETACH DATABASE '%s'", newFormat));
-            db.close();
-            this.close();
-            Log.i(TAG, "Done exporting to: " + newFormat);
-
-            try {
-                // Set version of database
-                SQLiteDatabase tempDb = SQLiteDatabase.openDatabase(db.getPath() + "-temp", newPassword, null, SQLiteDatabase.OPEN_READWRITE);
-                tempDb.setVersion(version);
-                tempDb.close();
-            } catch (Exception e) {
-                // If we could not open the temp database, delete it and return failure.
-                deleteTempDatabase(pathToDb, "-temp");
-                return false;
-            }
-
-            try {
-                // Save away the old database
-                if (!moveFile(pathToDb, pathToDb + "-BAK")) {
-                    return false;
-                }
-                // Move the temp database file over the old database
-                if (!moveFile(pathToDb + "-temp", pathToDb)) {
-                    throw new IllegalStateException();
-                }
-
-                // Test-open the new database and read off the version.
-                SQLiteDatabase newDb = SQLiteDatabase.openDatabase(db.getPath(), newPassword, null, SQLiteDatabase.OPEN_READWRITE);
-                newDb.getVersion();
-                newDb.close();
-            } catch (Exception e) {
-                // Having received an exception in testing the DB above, restore the old DB and return failure.
-                Log.e(TAG, format("changeDatabasePassword - Failure while switching database to format %s", newFormat));
-                Log.e(TAG, Log.getStackTraceString(e));
-                moveFile(pathToDb + "-BAK", pathToDb);
-                return false;
-            } finally {
-                // Having succeeded to open the database without an exception, delete the backup of the old DB.
-                deleteTempDatabase(pathToDb, "-BAK");
-                // And set the password to the new password.
+        String tempPath = pathToDb + "-temp";
+        String backupPath = pathToDb + "-BAK";
+        boolean oldMoved = false;
+        try {
+            if (Database.password.equals(newPassword)) return true;
+            if (!Database.password.isEmpty() && !newPassword.isEmpty()) {
+                db.execSQL("PRAGMA rekey = " + sqlLiteral(newPassword));
                 Database.setPassword(newPassword);
+                return true;
             }
-        } else {
-            db.close();
-            this.close();
-        }
 
-        return true;
+            // Never overwrite a backup left by a failed restoration.
+            if (new File(backupPath).exists()) return false;
+            deleteTempDatabase(pathToDb, "-temp");
+            if (new File(tempPath).exists()) return false;
+            int version = db.getVersion();
+            db.execSQL("ATTACH DATABASE " + sqlLiteral(tempPath) + " AS converted KEY " + sqlLiteral(newPassword));
+            try {
+                try (Cursor cursor = db.rawQuery("SELECT sqlcipher_export('converted')", null)) {
+                    if (!cursor.moveToFirst()) throw new IllegalStateException("Database export returned no result");
+                }
+            } finally {
+                db.execSQL("DETACH DATABASE converted");
+            }
+            close();
+
+            SQLiteDatabase tempDb = SQLiteDatabase.openDatabase(tempPath, newPassword, null, SQLiteDatabase.OPEN_READWRITE, null);
+            try {
+                tempDb.setVersion(version);
+            } finally {
+                tempDb.close();
+            }
+            if (!moveFile(pathToDb, backupPath)) return false;
+            oldMoved = true;
+            if (!moveFile(tempPath, pathToDb)) throw new IllegalStateException("Cannot install converted database");
+            SQLiteDatabase newDb = SQLiteDatabase.openDatabase(pathToDb, newPassword, null, SQLiteDatabase.OPEN_READWRITE, null);
+            try {
+                newDb.getVersion();
+            } finally {
+                newDb.close();
+            }
+            Database.setPassword(newPassword);
+            deleteTempDatabase(pathToDb, "-BAK");
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "changeDatabasePassword failed", e);
+            if (oldMoved && !moveFile(backupPath, pathToDb)) {
+                Log.e(TAG, "Database restore failed; backup retained at " + backupPath);
+            }
+            return false;
+        } finally {
+            close();
+            deleteTempDatabase(pathToDb, "-temp");
+        }
     }
 
     private boolean moveFile(String from, String to) {
@@ -279,7 +302,7 @@ public class Database extends SQLiteOpenHelper {
     }
 
     /* (non-Javadoc)
-     * @see net.sqlcipher.database.SQLiteOpenHelper#onUpgrade(net.sqlcipher.database.SQLiteDatabase, int, int)
+     * @see net.zetetic.database.sqlcipher.SQLiteOpenHelper#onUpgrade(net.zetetic.database.sqlcipher.SQLiteDatabase, int, int)
      */
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
@@ -642,15 +665,15 @@ public class Database extends SQLiteOpenHelper {
         Log.i(TAG, "Checking master password.");
         boolean result;
 
-        Database testPassword = new Database(context);
-        testPassword.close();
+        Database testPassword = new Database(context, password, false);
         try {
-            testPassword.getReadableDatabase(password);
+            testPassword.getReadableDatabase();
             result = true;
         } catch (Exception e) {
             result = false;
+        } finally {
+            testPassword.close();
         }
-        testPassword.close();
         return result;
     }
 }
