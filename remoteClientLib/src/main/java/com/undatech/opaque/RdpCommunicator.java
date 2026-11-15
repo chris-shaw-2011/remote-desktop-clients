@@ -734,29 +734,8 @@ public class RdpCommunicator extends RfbConnectable implements RdpKeyboardMapper
         framebufferWidth = width;
         framebufferHeight = height;
         sendEmptyMessageToAll(RemoteClientLibConstants.GRAPHICS_SETTINGS_RECEIVED);
-        BookmarkBase.ScreenSettings settings = session.getBookmark().getActiveScreenSettings();
-        if (monitorCount > 1) {
-            updateScreenSettings(width / monitorCount, height, bpp);
-            reallocateMonitorDrawables(width / monitorCount, height);
-        } else if (settings.getWidth() != width || settings.getHeight() != height) {
-            Log.i(TAG, "OnSettingsChanged width and height do not match saved values, saving and reconnecting");
-            saveConnectionSettings(width, height, bpp);
-            handler.sendEmptyMessage(RemoteClientLibConstants.REINIT_SESSION);
-        } else {
-            List<MonitorTarget> targets = getMonitorTargets();
-            if (!targets.isEmpty()) {
-                targets.get(0).viewable.reallocateDrawable(width, height);
-            }
-        }
-    }
-
-    private void saveConnectionSettings(int width, int height, int bpp) {
-        connection.setRdpResType(RemoteClientLibConstants.RDP_GEOM_SELECT_CUSTOM);
-        connection.setRdpWidth(width);
-        connection.setRdpHeight(height);
-        connection.setRdpColor(bpp);
-        connection.save(context);
-        updateScreenSettings(width, height, bpp);
+        updateScreenSettings(width / monitorCount, height, bpp);
+        reallocateMonitorDrawables(width / monitorCount, height);
     }
 
     private void updateScreenSettings(int width, int height, int bpp) {

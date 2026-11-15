@@ -137,7 +137,7 @@ public class ConnectionBean extends AbstractConnectionBean implements Comparable
         setRdpColor(Constants.DEFAULT_RDP_COLOR_MODE);
         setRemoteFx(true);
         setDesktopBackground(false);
-        setFontSmoothing(false);
+        setFontSmoothing(true);
         setDesktopComposition(false);
         setWindowContents(false);
         setMenuAnimation(false);

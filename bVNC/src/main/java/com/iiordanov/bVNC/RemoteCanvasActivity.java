@@ -49,6 +49,7 @@ import android.os.Vibrator;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.Display;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -273,6 +274,9 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         Log.d(TAG, "onWindowFocusChanged: " + hasFocus);
+        if (hasFocus) {
+            updatePreferredRefreshRate();
+        }
         canvas.setForegrounded(hasFocus);
         if (hasFocus) {
             SystemKeyCaptureService.setKeyEventListener(this);
@@ -877,6 +881,7 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
     protected void onResume() {
         super.onResume();
         Log.i(TAG, "onResume called.");
+        updatePreferredRefreshRate();
         try {
             canvas.postInvalidateDelayed(600);
         } catch (NullPointerException e) {
@@ -965,6 +970,7 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        updatePreferredRefreshRate();
         controlImmersive();
         try {
             setExtraKeysVisibility(View.GONE, false);
@@ -972,6 +978,43 @@ public class RemoteCanvasActivity extends NormalizedScrollActivity implements
         } catch (NullPointerException e) {
             Log.d(TAG, "Ignoring NullPointerException during onConfigurationChanged");
         }
+    }
+
+    private void updatePreferredRefreshRate() {
+        if (!Utils.isRdp(this)) {
+            return;
+        }
+        Display display = getWindowManager().getDefaultDisplay();
+        if (display == null) {
+            return;
+        }
+        Display.Mode currentMode = display.getMode();
+        float refreshRate = highestRefreshRateForResolution(display.getSupportedModes(),
+                currentMode.getPhysicalWidth(), currentMode.getPhysicalHeight());
+        if (refreshRate <= 0f) {
+            return;
+        }
+        Window window = getWindow();
+        WindowManager.LayoutParams attributes = window.getAttributes();
+        if (Float.compare(attributes.preferredRefreshRate, refreshRate) != 0) {
+            attributes.preferredRefreshRate = refreshRate;
+            window.setAttributes(attributes);
+        }
+    }
+
+    static float highestRefreshRateForResolution(Display.Mode[] modes,
+                                                  int physicalWidth, int physicalHeight) {
+        if (modes == null) {
+            return 0f;
+        }
+        float highest = 0f;
+        for (Display.Mode mode : modes) {
+            if (mode != null && mode.getPhysicalWidth() == physicalWidth
+                    && mode.getPhysicalHeight() == physicalHeight) {
+                highest = Math.max(highest, mode.getRefreshRate());
+            }
+        }
+        return highest;
     }
 
     @Override

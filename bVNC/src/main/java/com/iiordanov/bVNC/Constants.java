@@ -51,7 +51,7 @@ public class Constants {
     public static final int DEFAULT_VNC_PORT = 5900;
     public static final int DEFAULT_RDP_PORT = 3389;
     public static final int DEFAULT_RDP_GATEWAY_PORT = 443;
-    public static final int DEFAULT_RDP_COLOR_MODE = 16;
+    public static final int DEFAULT_RDP_COLOR_MODE = 32;
     public static final int DEFAULT_RDP_SECURITY_AUTO_NEGOTIATE = 0;
 
     public static final boolean ENABLE_GLYPH_CACHE_DEFAULT = false;
